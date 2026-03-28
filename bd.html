@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Le Masque d'Anansi — BD Afrique</title>
+  <title>Créateur de BD — Le Masque d'Anansi</title>
   <link rel="stylesheet" href="bd_style.css">
 </head>
 <body>
@@ -12,7 +12,6 @@
 <div id="cover" class="screen active">
   <div class="cover-bg">
     <svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" class="cover-art">
-      <!-- Sky -->
       <defs>
         <radialGradient id="sunGrad" cx="50%" cy="30%" r="60%">
           <stop offset="0%" stop-color="#FF6B00"/>
@@ -25,33 +24,26 @@
         </radialGradient>
       </defs>
       <rect width="800" height="600" fill="url(#sunGrad)"/>
-      <!-- Sun -->
       <circle cx="400" cy="180" r="70" fill="#FFD700" opacity="0.9"/>
       <circle cx="400" cy="180" r="90" fill="url(#maskGlow)"/>
-      <!-- Silhouette baobabs -->
       <rect x="50" y="380" width="30" height="220" fill="#1a0a00"/>
       <ellipse cx="65" cy="380" rx="70" ry="50" fill="#1a0a00"/>
       <rect x="700" y="350" width="40" height="250" fill="#1a0a00"/>
       <ellipse cx="720" cy="350" rx="80" ry="55" fill="#1a0a00"/>
       <rect x="680" y="360" width="20" height="240" fill="#1a0a00"/>
-      <!-- Silhouette girl -->
       <ellipse cx="400" cy="310" rx="25" ry="30" fill="#1a0a00"/>
       <rect x="385" y="335" width="30" height="80" fill="#1a0a00"/>
       <line x1="385" y1="355" x2="360" y2="390" stroke="#1a0a00" stroke-width="8" stroke-linecap="round"/>
       <line x1="415" y1="355" x2="440" y2="390" stroke="#1a0a00" stroke-width="8" stroke-linecap="round"/>
       <line x1="393" y1="415" x2="385" y2="460" stroke="#1a0a00" stroke-width="8" stroke-linecap="round"/>
       <line x1="407" y1="415" x2="415" y2="460" stroke="#1a0a00" stroke-width="8" stroke-linecap="round"/>
-      <!-- Mask held up -->
       <ellipse cx="360" cy="340" rx="22" ry="28" fill="#FFD700" opacity="0.95"/>
       <circle cx="353" cy="333" r="5" fill="#1a0a00"/>
       <circle cx="367" cy="333" r="5" fill="#1a0a00"/>
       <path d="M350 347 Q360 355 370 347" stroke="#1a0a00" stroke-width="2" fill="none"/>
-      <!-- Glow around mask -->
       <circle cx="360" cy="340" r="35" fill="#FFD700" opacity="0.3"/>
       <circle cx="360" cy="340" r="50" fill="#FF6B00" opacity="0.15"/>
-      <!-- Ground -->
       <ellipse cx="400" cy="560" rx="400" ry="80" fill="#3d1f00"/>
-      <!-- Stars -->
       <circle cx="100" cy="80" r="2" fill="white" opacity="0.8"/>
       <circle cx="200" cy="50" r="1.5" fill="white" opacity="0.6"/>
       <circle cx="600" cy="70" r="2" fill="white" opacity="0.8"/>
@@ -62,32 +54,85 @@
     <div class="cover-text">
       <div class="cover-subtitle">Une aventure en Afrique subsaharienne</div>
       <h1 class="cover-title">LE MASQUE<br>D'ANANSI</h1>
-      <div class="cover-author">10 pages · Suspense & Mystère</div>
-      <button class="btn-start" onclick="startComic()">&#9654; LIRE LA BD</button>
+      <div class="cover-author">Créateur de BD interactif</div>
+      <button class="btn-start" onclick="showSetup()">&#9654; CRÉER MA BD</button>
     </div>
   </div>
 </div>
 
-<!-- COMIC READER -->
-<div id="reader" class="screen">
-  <header class="reader-header">
-    <button class="btn-nav" onclick="showCover()">&#8592; Couverture</button>
-    <div class="page-indicator">
-      <span id="currentPage">1</span> / <span id="totalPages">10</span>
+<!-- SETUP -->
+<div id="setup" class="screen">
+  <div class="setup-inner">
+    <button class="btn-nav setup-back" onclick="showCover()">&#8592; Retour</button>
+    <h2 class="setup-title">Créer une BD</h2>
+    <div class="setup-label">Nombre de pages</div>
+    <div class="setup-picker">
+      <button class="btn-picker" onclick="adjustPageCount(-1)">&#8722;</button>
+      <span id="pageCountDisplay">5</span>
+      <button class="btn-picker" onclick="adjustPageCount(1)">+</button>
     </div>
-    <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
-    <div class="page-title" id="pageTitle"></div>
+    <input type="range" id="pageCountSlider" min="1" max="20" value="5"
+           oninput="syncPageCount(this.value)">
+    <div class="setup-hint">1 à 20 pages</div>
+    <button class="btn-start" onclick="createComic()">&#10022; CRÉER</button>
+  </div>
+</div>
+
+<!-- EDITOR -->
+<div id="editor" class="screen">
+
+  <!-- TOOLBAR -->
+  <header class="editor-toolbar">
+    <button class="btn-nav" onclick="showSetup()">&#8592; Recommencer</button>
+
+    <div class="toolbar-sep"></div>
+
+    <div class="toolbar-group">
+      <span class="toolbar-label">Disposition&nbsp;:</span>
+      <button class="btn-layout active" data-layout="grid-4" onclick="setLayout('grid-4')" title="2×2 cases">⊞&nbsp;4</button>
+      <button class="btn-layout" data-layout="grid-5" onclick="setLayout('grid-5')" title="5 cases (3+2)">⊞&nbsp;5</button>
+      <button class="btn-layout" data-layout="grid-6" onclick="setLayout('grid-6')" title="3×2 cases">⊞&nbsp;6</button>
+      <button class="btn-layout" data-layout="grid-2" onclick="setLayout('grid-2')" title="2 cases côte à côte">&#9644;&nbsp;2</button>
+      <button class="btn-layout" data-layout="full"   onclick="setLayout('full')"   title="Pleine page">&#9633;&nbsp;1</button>
+    </div>
+
+    <div class="toolbar-sep"></div>
+
+    <div class="toolbar-group">
+      <button class="btn-nav-sm" id="editorPrev" onclick="editorChangePage(-1)">&#9664;</button>
+      <span class="page-indicator">Page&nbsp;<span id="editorCurrentPage">1</span>&nbsp;/&nbsp;<span id="editorTotalPages">5</span></span>
+      <button class="btn-nav-sm" id="editorNext" onclick="editorChangePage(1)">&#9654;</button>
+    </div>
   </header>
 
-  <main class="comic-stage">
-    <div id="comicPage" class="comic-page"></div>
-  </main>
+  <!-- SPLIT VIEW -->
+  <div class="editor-body">
 
-  <footer class="reader-footer">
-    <button class="btn-arrow" id="btnPrev" onclick="changePage(-1)">&#9664;</button>
-    <div class="dots" id="dots"></div>
-    <button class="btn-arrow" id="btnNext" onclick="changePage(1)">&#9654;</button>
-  </footer>
+    <!-- LEFT: Script pane -->
+    <aside class="script-pane">
+      <div class="script-pane-header">Script — Page <span id="scriptPageLabel">1</span></div>
+      <div id="scriptPanelList" class="script-panel-list"></div>
+    </aside>
+
+    <!-- RIGHT: Preview pane -->
+    <main class="preview-pane" onclick="handlePreviewClick(event)">
+      <div class="preview-stage">
+        <div id="editorComicPage" class="comic-page"></div>
+      </div>
+    </main>
+
+  </div>
+</div>
+
+<!-- BUBBLE TOOLBAR (floating, fixed) -->
+<div id="bubbleToolbar" class="bubble-toolbar hidden">
+  <button onclick="setBubbleType('standard')" title="Bulle normale">&#128172;</button>
+  <button onclick="setBubbleType('right')"    title="Bulle queue à droite">&#128172;&#8594;</button>
+  <button onclick="setBubbleType('thought')"  title="Bulle pensée">&#128173;</button>
+  <button onclick="setBubbleType('shout')"    title="Cri / exclamation">&#128226;</button>
+  <button onclick="setBubbleType('narration')" title="Narration / légende">&#128214;</button>
+  <div class="bubble-toolbar-sep"></div>
+  <button class="btn-delete-bubble" onclick="deleteBubble()" title="Supprimer la bulle">&#10005;</button>
 </div>
 
 <script src="bd_script.js"></script>
