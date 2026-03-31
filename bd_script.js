@@ -1,537 +1,692 @@
 'use strict';
 
-// ===== STATE =====
-const state = {
-  pageCount: 5,
-  currentPageIndex: 0,
-  selectedBubbleId: null,
-  drag: null,
-  resize: null,
-  pages: []
+// ===== APP STATE =====
+const app = {
+  currentProjectId: null,
+  currentEpisodeIndex: 0,
+  pendingUpload: null // { projectId, panelKey, type: 'panel'|'character', charId? }
 };
 
 // ===== SCREEN MANAGEMENT =====
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-}
-function showCover()  { showScreen('cover'); }
-function showSetup()  { showScreen('setup'); }
-function startComic() { showSetup(); } // keep for backwards compat
-
-// ===== SETUP =====
-function adjustPageCount(delta) {
-  state.pageCount = Math.max(1, Math.min(20, state.pageCount + delta));
-  _syncPageCountUI();
-}
-function syncPageCount(val) {
-  state.pageCount = parseInt(val, 10);
-  _syncPageCountUI();
-}
-function _syncPageCountUI() {
-  document.getElementById('pageCountDisplay').textContent = state.pageCount;
-  document.getElementById('pageCountSlider').value = state.pageCount;
+  window.scrollTo(0, 0);
 }
 
-// ===== COMIC CREATION =====
-function createComic() {
-  state.pages = [];
-  state.currentPageIndex = 0;
-  state.selectedBubbleId = null;
-  state.drag = null;
-  state.resize = null;
+function showLibrary() {
+  app.currentProjectId = null;
+  showScreen('library');
+  renderLibrary();
+}
 
-  for (let p = 0; p < state.pageCount; p++) {
-    state.pages.push(_createPageData(p, 'grid-4'));
+function showCreation() {
+  showScreen('creation');
+  resetCreationForm();
+}
+
+// ===== INIT =====
+function initApp() {
+  // Load saved API key
+  const savedKey = StorageManager.getApiKey();
+  if (savedKey) {
+    document.getElementById('inputApiKey').value = savedKey;
+  }
+  renderLibrary();
+}
+
+// ===== LIBRARY =====
+function renderLibrary() {
+  const projects = StorageManager.getAllProjects();
+  const grid = document.getElementById('projectList');
+  const empty = document.getElementById('emptyLibrary');
+
+  grid.innerHTML = '';
+
+  if (projects.length === 0) {
+    grid.classList.add('hidden');
+    empty.classList.remove('hidden');
+    return;
   }
 
-  _setupGlobalEvents();
-  showScreen('editor');
-  renderEditor();
+  grid.classList.remove('hidden');
+  empty.classList.add('hidden');
+
+  projects.forEach(project => {
+    const card = document.createElement('div');
+    card.className = 'project-card';
+    card.onclick = function(e) {
+      if (e.target.closest('.project-card-delete')) return;
+      openProject(project.id);
+    };
+
+    const episodeCount = project.data && project.data.episodes ? project.data.episodes.length : 0;
+    const date = new Date(project.createdAt).toLocaleDateString('fr-FR');
+
+    card.innerHTML =
+      '<div class="project-card-title">' + escapeHtml(project.title) + '</div>' +
+      '<div class="project-card-info">' +
+        episodeCount + ' épisode' + (episodeCount > 1 ? 's' : '') + '<br>' +
+        '<span style="font-size:0.7rem;color:#5a3a0a">' + date + '</span>' +
+      '</div>' +
+      '<button class="project-card-delete" onclick="deleteProjectConfirm(\'' + project.id + '\')" title="Supprimer">&times;</button>';
+
+    grid.appendChild(card);
+  });
 }
 
-function _createPageData(idx, layout) {
-  return {
-    id: 'page-' + idx,
-    layout: layout,
-    panels: Array.from({ length: _layoutPanelCount(layout) }, function(_, i) {
-      return _createPanelData(idx, i);
-    })
-  };
+function deleteProjectConfirm(id) {
+  const project = StorageManager.getProject(id);
+  if (!project) return;
+  if (confirm('Supprimer "' + project.title + '" ? Cette action est irréversible.')) {
+    StorageManager.deleteProject(id);
+    renderLibrary();
+  }
 }
 
-function _createPanelData(pageIdx, panelIdx) {
-  return {
-    id: 'panel-' + pageIdx + '-' + panelIdx,
-    scriptText: '',
-    imagePrompt: '',
-    bubbles: []
-  };
+function openProject(id) {
+  app.currentProjectId = id;
+  app.currentEpisodeIndex = 0;
+  showScreen('viewer');
+  renderViewer();
 }
 
-function _layoutPanelCount(layout) {
-  var counts = { 'grid-4': 4, 'grid-5': 5, 'grid-6': 6, 'full': 1, 'grid-2': 2 };
-  return counts[layout] || 4;
+// ===== CREATION FORM =====
+function resetCreationForm() {
+  document.getElementById('inputTitle').value = '';
+  document.getElementById('inputDescription').value = '';
+  document.getElementById('inputSetting').value = '';
+  document.getElementById('inputEpisodes').value = '3';
+  document.getElementById('inputPanels').value = '15';
+  document.querySelectorAll('.theme-checkboxes input').forEach(cb => { cb.checked = false; });
+
+  const charFields = document.getElementById('characterFields');
+  charFields.innerHTML = '';
+  // Add 2 default character fields
+  addCharacterField();
+  addCharacterField();
+
+  // Restore API key
+  const savedKey = StorageManager.getApiKey();
+  if (savedKey) {
+    document.getElementById('inputApiKey').value = savedKey;
+  }
 }
 
-// ===== LAYOUT CHANGE =====
-function setLayout(layout) {
-  var page = state.pages[state.currentPageIndex];
-  var oldPanels = page.panels;
-  var newCount = _layoutPanelCount(layout);
+function addCharacterField() {
+  const container = document.getElementById('characterFields');
+  if (container.children.length >= 6) return;
 
-  page.layout = layout;
-  page.panels = Array.from({ length: newCount }, function(_, i) {
-    if (i < oldPanels.length) {
-      var p = oldPanels[i];
-      p.id = 'panel-' + state.currentPageIndex + '-' + i;
-      return p;
+  const row = document.createElement('div');
+  row.className = 'char-field-row';
+  row.innerHTML =
+    '<input type="text" class="form-input char-name" placeholder="Nom">' +
+    '<input type="text" class="form-input char-desc" placeholder="Description physique (ex: femme de 25 ans, grande, peau ébène...)">' +
+    '<button type="button" class="btn-remove-char" onclick="this.parentElement.remove();updateAddCharBtn()">&times;</button>';
+
+  container.appendChild(row);
+  updateAddCharBtn();
+}
+
+function updateAddCharBtn() {
+  const count = document.getElementById('characterFields').children.length;
+  const btn = document.getElementById('btnAddChar');
+  if (count >= 6) {
+    btn.classList.add('hidden');
+  } else {
+    btn.classList.remove('hidden');
+  }
+}
+
+// ===== GENERATION =====
+let generationAborted = false;
+
+function startGeneration() {
+  // Validate
+  const title = document.getElementById('inputTitle').value.trim();
+  const description = document.getElementById('inputDescription').value.trim();
+  const setting = document.getElementById('inputSetting').value.trim();
+  const episodes = parseInt(document.getElementById('inputEpisodes').value);
+  const panelsPerEpisode = parseInt(document.getElementById('inputPanels').value);
+  const apiKey = document.getElementById('inputApiKey').value.trim();
+
+  if (!title) { alert('Veuillez entrer un titre.'); return; }
+  if (!description) { alert('Veuillez décrire l\'histoire.'); return; }
+  if (!apiKey) { alert('Veuillez entrer votre clé API Claude.'); return; }
+
+  // Themes
+  const themes = [];
+  document.querySelectorAll('.theme-checkboxes input:checked').forEach(cb => {
+    themes.push(cb.value);
+  });
+
+  // Characters
+  const characters = [];
+  document.querySelectorAll('.char-field-row').forEach(row => {
+    const name = row.querySelector('.char-name').value.trim();
+    const desc = row.querySelector('.char-desc').value.trim();
+    if (name) {
+      characters.push({ name: name, description: desc || 'non spécifié' });
     }
-    return _createPanelData(state.currentPageIndex, i);
   });
 
-  deselectBubble();
-  renderEditor();
-}
+  if (characters.length === 0) {
+    alert('Ajoutez au moins un personnage.');
+    return;
+  }
 
-// ===== EDITOR RENDER =====
-function renderEditor() {
-  renderScriptPane();
-  renderPreviewPane();
-  _updateEditorNav();
-}
+  // Save API key
+  StorageManager.setApiKey(apiKey);
 
-function _updateEditorNav() {
-  var page = state.pages[state.currentPageIndex];
-  document.getElementById('editorCurrentPage').textContent = state.currentPageIndex + 1;
-  document.getElementById('editorTotalPages').textContent  = state.pageCount;
-  document.getElementById('scriptPageLabel').textContent   = state.currentPageIndex + 1;
+  // Switch to generation screen
+  showScreen('generating');
+  generationAborted = false;
+  document.getElementById('genError').classList.add('hidden');
+  document.getElementById('btnCancelGen').classList.remove('hidden');
+  document.getElementById('genProgressFill').style.width = '0%';
+  document.getElementById('genMessage').textContent = 'Préparation...';
 
-  document.getElementById('editorPrev').disabled = (state.currentPageIndex === 0);
-  document.getElementById('editorNext').disabled = (state.currentPageIndex === state.pageCount - 1);
+  const params = { title, description, setting, episodes, panelsPerEpisode, themes, characters };
 
-  document.querySelectorAll('.btn-layout').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.layout === page.layout);
-  });
-}
+  Generator.generateDrama(params, apiKey, function(message, percent) {
+    if (generationAborted) return;
+    document.getElementById('genMessage').textContent = message;
+    document.getElementById('genProgressFill').style.width = percent + '%';
+  }).then(function(data) {
+    if (generationAborted) return;
 
-// ===== SCRIPT PANE =====
-function renderScriptPane() {
-  var page = state.pages[state.currentPageIndex];
-  var container = document.getElementById('scriptPanelList');
-  container.innerHTML = '';
+    // Create project
+    const project = {
+      id: StorageManager.generateId(),
+      title: title,
+      setting: setting,
+      description: description,
+      themes: themes,
+      data: data,
+      images: {}
+    };
 
-  page.panels.forEach(function(panel, i) {
-    var item = document.createElement('div');
-    item.className = 'script-panel-item';
+    StorageManager.saveProject(project);
 
-    var header = document.createElement('div');
-    header.className = 'script-panel-header';
-    header.textContent = 'Case ' + (i + 1);
+    // Open viewer
+    app.currentProjectId = project.id;
+    app.currentEpisodeIndex = 0;
+    showScreen('viewer');
+    renderViewer();
 
-    var scriptLabel = document.createElement('div');
-    scriptLabel.className = 'script-label';
-    scriptLabel.textContent = 'Script / dialogue';
-
-    var scriptTA = document.createElement('textarea');
-    scriptTA.className = 'script-textarea';
-    scriptTA.placeholder = 'Écrire le dialogue, la narration...';
-    scriptTA.value = panel.scriptText;
-    scriptTA.addEventListener('input', function() { panel.scriptText = scriptTA.value; });
-
-    var promptLabel = document.createElement('div');
-    promptLabel.className = 'script-label';
-    promptLabel.textContent = 'Prompt image';
-
-    var promptTA = document.createElement('textarea');
-    promptTA.className = 'prompt-textarea';
-    promptTA.placeholder = 'Description visuelle de la case...';
-    promptTA.value = panel.imagePrompt;
-    promptTA.addEventListener('input', function() { panel.imagePrompt = promptTA.value; });
-
-    var addBtn = document.createElement('button');
-    addBtn.className = 'btn-add-bubble';
-    addBtn.textContent = '+ Ajouter une bulle';
-    (function(pid) {
-      addBtn.addEventListener('click', function() { addBubble(pid); });
-    })(panel.id);
-
-    item.append(header, scriptLabel, scriptTA, promptLabel, promptTA, addBtn);
-    container.appendChild(item);
+  }).catch(function(err) {
+    if (generationAborted) return;
+    document.getElementById('genError').textContent = err.message;
+    document.getElementById('genError').classList.remove('hidden');
+    document.getElementById('btnCancelGen').textContent = '← Retour';
+    document.getElementById('genMessage').textContent = 'Erreur';
+    document.getElementById('genProgressFill').style.width = '0%';
   });
 }
 
-// ===== PREVIEW PANE =====
-function renderPreviewPane() {
-  var page = state.pages[state.currentPageIndex];
-  var container = document.getElementById('editorComicPage');
-  container.innerHTML = '';
+function cancelGeneration() {
+  generationAborted = true;
+  showCreation();
+}
 
-  var grid = document.createElement('div');
-  grid.className = 'panel-grid ' + page.layout;
+// ===== VIEWER =====
+function renderViewer() {
+  const project = StorageManager.getProject(app.currentProjectId);
+  if (!project || !project.data) { showLibrary(); return; }
 
-  page.panels.forEach(function(panel, i) {
-    var panelEl = document.createElement('div');
-    panelEl.className = 'panel editor-panel';
-    panelEl.dataset.panelId = panel.id;
+  document.getElementById('viewerTitle').textContent = project.data.title || project.title;
 
-    var label = document.createElement('div');
-    label.className = 'panel-label';
-    label.textContent = 'Case ' + (i + 1);
-    panelEl.appendChild(label);
+  // Reset to BD tab
+  switchTab('bd');
+  renderBDTab();
+}
 
-    panel.bubbles.forEach(function(bubble) {
-      renderBubble(bubble, panelEl);
-    });
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.tab-content').forEach(tc => {
+    tc.classList.toggle('active', tc.id === 'tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
+  });
+
+  // Map tab names to content IDs
+  if (tabName === 'bd') renderBDTab();
+  else if (tabName === 'characters') renderCharactersTab();
+  else if (tabName === 'prompts') renderPromptsTab();
+}
+
+// ===== BD TAB =====
+function renderBDTab() {
+  const project = StorageManager.getProject(app.currentProjectId);
+  if (!project || !project.data) return;
+
+  const episodes = project.data.episodes;
+  const epIdx = app.currentEpisodeIndex;
+
+  if (!episodes || episodes.length === 0) return;
+
+  // Clamp index
+  if (epIdx >= episodes.length) app.currentEpisodeIndex = episodes.length - 1;
+
+  const episode = episodes[app.currentEpisodeIndex];
+
+  // Nav
+  document.getElementById('episodeIndicator').textContent =
+    'Épisode ' + (app.currentEpisodeIndex + 1) + ' / ' + episodes.length;
+  document.getElementById('btnPrevEp').disabled = (app.currentEpisodeIndex === 0);
+  document.getElementById('btnNextEp').disabled = (app.currentEpisodeIndex === episodes.length - 1);
+  document.getElementById('episodeTitle').textContent = episode.title || '';
+
+  // Grid
+  const grid = document.getElementById('bdGrid');
+  grid.innerHTML = '';
+
+  episode.panels.forEach(function(panel, pIdx) {
+    const panelEl = document.createElement('div');
+    panelEl.className = 'bd-panel';
+    panelEl.dataset.layout = panel.layout || 'medium';
+
+    const panelKey = 'ep' + (app.currentEpisodeIndex + 1) + '-panel' + (pIdx + 1);
+
+    // Panel number
+    const numEl = document.createElement('div');
+    numEl.className = 'bd-panel-num';
+    numEl.textContent = panel.number || (pIdx + 1);
+    panelEl.appendChild(numEl);
+
+    // Image if uploaded
+    const imgData = project.images && project.images[panelKey];
+    if (imgData) {
+      const img = document.createElement('img');
+      img.className = 'bd-panel-img';
+      img.src = imgData;
+      img.alt = 'Case ' + (pIdx + 1);
+      panelEl.appendChild(img);
+    }
+
+    // SFX (absolute positioned)
+    if (panel.sfx) {
+      const sfxEl = document.createElement('div');
+      sfxEl.className = 'bd-sfx';
+      sfxEl.textContent = panel.sfx;
+      panelEl.appendChild(sfxEl);
+    }
+
+    // Upload overlay
+    const uploadOverlay = document.createElement('div');
+    uploadOverlay.className = 'bd-upload-overlay';
+    uploadOverlay.innerHTML = '<span>&#128247;</span>';
+    uploadOverlay.onclick = function(e) {
+      e.stopPropagation();
+      triggerPanelUpload(project.id, panelKey);
+    };
+    panelEl.appendChild(uploadOverlay);
+
+    // Content container
+    const content = document.createElement('div');
+    content.className = 'bd-panel-content';
+
+    // Scene description (subtle, only when no image)
+    if (!imgData && panel.scene_description) {
+      const sceneEl = document.createElement('div');
+      sceneEl.className = 'bd-scene-desc';
+      sceneEl.textContent = panel.scene_description;
+      content.appendChild(sceneEl);
+    }
+
+    // Dialogue bubbles
+    if (panel.dialogue) {
+      const charIds = Object.keys(panel.dialogue);
+      charIds.forEach(function(charId) {
+        const text = panel.dialogue[charId];
+        if (!text) return;
+
+        const character = project.data.characters.find(c => c.id === charId);
+        const charName = character ? character.name : charId;
+
+        const bubbleEl = document.createElement('div');
+        bubbleEl.className = 'bd-bubble';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'bd-bubble-name';
+        nameEl.textContent = charName;
+        bubbleEl.appendChild(nameEl);
+
+        const textEl = document.createElement('div');
+        textEl.textContent = text;
+        bubbleEl.appendChild(textEl);
+
+        content.appendChild(bubbleEl);
+      });
+    }
+
+    // Voice over
+    if (panel.voice_over) {
+      const voEl = document.createElement('div');
+      voEl.className = 'bd-voiceover';
+      voEl.textContent = panel.voice_over;
+      content.appendChild(voEl);
+    }
+
+    // Caption
+    if (panel.caption) {
+      const capEl = document.createElement('div');
+      capEl.className = 'bd-caption';
+      capEl.textContent = panel.caption;
+      content.appendChild(capEl);
+    }
+
+    panelEl.appendChild(content);
+
+    // Click for overlay
+    panelEl.onclick = function() { showPanelOverlay(panel, project, panelKey); };
 
     grid.appendChild(panelEl);
   });
 
-  container.appendChild(grid);
+  // Cliffhanger
+  const cliffBanner = document.getElementById('cliffhangerBanner');
+  if (episode.cliffhanger_text) {
+    cliffBanner.textContent = episode.cliffhanger_text;
+    cliffBanner.classList.remove('hidden');
+  } else {
+    cliffBanner.classList.add('hidden');
+  }
 }
 
-// ===== BUBBLE RENDER =====
-function renderBubble(bubble, panelEl) {
-  var el = document.createElement('div');
-  el.id = bubble.id;
+function changeEpisode(delta) {
+  const project = StorageManager.getProject(app.currentProjectId);
+  if (!project || !project.data) return;
+  const episodes = project.data.episodes;
+  const newIdx = app.currentEpisodeIndex + delta;
+  if (newIdx < 0 || newIdx >= episodes.length) return;
+  app.currentEpisodeIndex = newIdx;
+  renderBDTab();
+}
 
-  var classes = ['bubble'];
-  var typeClass = _getBubbleClass(bubble.type);
-  if (typeClass) classes.push(typeClass);
-  if (bubble.id === state.selectedBubbleId) classes.push('selected');
-  el.className = classes.join(' ');
+// ===== PANEL OVERLAY =====
+function showPanelOverlay(panel, project, panelKey) {
+  const overlay = document.getElementById('panelOverlay');
+  const body = document.getElementById('overlayBody');
+  let html = '';
 
-  el.style.left     = bubble.x + 'px';
-  el.style.top      = bubble.y + 'px';
-  el.style.width    = bubble.width + 'px';
-  el.style.maxWidth = 'none';
-  el.style.position = 'absolute';
-  el.style.cursor   = 'grab';
-  if (!bubble.autoHeight && bubble.height) {
-    el.style.height = bubble.height + 'px';
+  html += '<div class="overlay-section">';
+  html += '<div class="overlay-label">Case ' + (panel.number || '') + ' — ' + (panel.layout || '') + '</div>';
+  html += '</div>';
+
+  // Image
+  const imgData = project.images && project.images[panelKey];
+  if (imgData) {
+    html += '<div class="overlay-section"><img src="' + imgData + '" style="width:100%;border-radius:4px;margin-bottom:8px;" alt="case"></div>';
   }
 
-  // Editable text
-  var textEl = document.createElement('div');
-  textEl.className = 'bubble-text';
-  textEl.contentEditable = 'true';
-  textEl.textContent = bubble.text;
-  textEl.addEventListener('mousedown', function(e) { e.stopPropagation(); });
-  textEl.addEventListener('click', function(e) {
-    e.stopPropagation();
-    selectBubble(bubble.id, panelEl);
-  });
-  textEl.addEventListener('input', function() { bubble.text = textEl.textContent; });
-  el.appendChild(textEl);
-
-  // Resize handles only for selected bubble
-  if (bubble.id === state.selectedBubbleId) {
-    _addResizeHandles(el, bubble, panelEl);
+  // Scene description
+  if (panel.scene_description) {
+    html += '<div class="overlay-section">';
+    html += '<div class="overlay-label">Description de la scène</div>';
+    html += '<div class="overlay-text">' + escapeHtml(panel.scene_description) + '</div>';
+    html += '</div>';
   }
 
-  // Drag (mousedown on bubble body, not on text or handles)
-  el.addEventListener('mousedown', function(e) {
-    if (e.target.classList.contains('resize-handle')) return;
-    if (e.target === textEl || textEl.contains(e.target)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    selectBubble(bubble.id, panelEl);
-    state.drag = {
-      bubbleId: bubble.id,
-      panelEl:  panelEl,
-      startX:   e.clientX,
-      startY:   e.clientY,
-      origX:    bubble.x,
-      origY:    bubble.y
-    };
-    document.body.style.cursor = 'grabbing';
-  });
-
-  // Stop click bubbling (prevents accidental deselect via handlePreviewClick)
-  el.addEventListener('click', function(e) { e.stopPropagation(); });
-
-  panelEl.appendChild(el);
-}
-
-function _getBubbleClass(type) {
-  var map = {
-    'standard': '',
-    'right':    'right',
-    'thought':  'thought',
-    'shout':    'shout',
-    'narration':'narration'
-  };
-  return map[type] !== undefined ? map[type] : '';
-}
-
-function _addResizeHandles(bubbleEl, bubble, panelEl) {
-  ['nw','n','ne','w','e','sw','s','se'].forEach(function(handle) {
-    var h = document.createElement('div');
-    h.className = 'resize-handle handle-' + handle;
-    h.addEventListener('mousedown', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      // Lock height if auto
-      if (bubble.autoHeight) {
-        bubble.height    = bubbleEl.offsetHeight;
-        bubble.autoHeight = false;
-      }
-      state.resize = {
-        bubbleId: bubble.id,
-        panelEl:  panelEl,
-        handle:   handle,
-        startX:   e.clientX,
-        startY:   e.clientY,
-        origX:    bubble.x,
-        origY:    bubble.y,
-        origW:    bubble.width,
-        origH:    bubble.height
-      };
-      document.body.style.cursor = handle + '-resize';
+  // Characters present
+  if (panel.characters_present && panel.characters_present.length > 0) {
+    const names = panel.characters_present.map(function(cid) {
+      const c = project.data.characters.find(ch => ch.id === cid);
+      return c ? c.name : cid;
     });
-    bubbleEl.appendChild(h);
-  });
+    html += '<div class="overlay-section">';
+    html += '<div class="overlay-label">Personnages présents</div>';
+    html += '<div class="overlay-text">' + escapeHtml(names.join(', ')) + '</div>';
+    html += '</div>';
+  }
+
+  // Dialogue
+  if (panel.dialogue) {
+    html += '<div class="overlay-section">';
+    html += '<div class="overlay-label">Dialogues</div>';
+    Object.keys(panel.dialogue).forEach(function(charId) {
+      const text = panel.dialogue[charId];
+      if (!text) return;
+      const character = project.data.characters.find(c => c.id === charId);
+      const charName = character ? character.name : charId;
+      html += '<div style="margin-bottom:6px;">';
+      html += '<strong style="color:var(--red);font-family:Bangers;letter-spacing:1px;">' + escapeHtml(charName) + '</strong>';
+      html += '<div class="overlay-dialogue">' + escapeHtml(text) + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Voice over
+  if (panel.voice_over) {
+    html += '<div class="overlay-section">';
+    html += '<div class="overlay-label">Voix off</div>';
+    html += '<div class="overlay-voiceover">' + escapeHtml(panel.voice_over) + '</div>';
+    html += '</div>';
+  }
+
+  // SFX
+  if (panel.sfx) {
+    html += '<div class="overlay-section">';
+    html += '<div class="overlay-label">SFX</div>';
+    html += '<div class="overlay-sfx">' + escapeHtml(panel.sfx) + '</div>';
+    html += '</div>';
+  }
+
+  // Caption
+  if (panel.caption) {
+    html += '<div class="overlay-section">';
+    html += '<div class="overlay-label">Caption</div>';
+    html += '<div class="overlay-text" style="font-style:italic;color:var(--gold);">' + escapeHtml(panel.caption) + '</div>';
+    html += '</div>';
+  }
+
+  // Pixverse prompt
+  if (panel.pixverse_prompt) {
+    html += '<div class="overlay-section">';
+    html += '<div class="overlay-label">Prompt Pixverse</div>';
+    html += '<div class="prompt-box">' + escapeHtml(panel.pixverse_prompt) + '</div>';
+    html += '<button class="btn-copy" style="margin-top:6px;" onclick="copyToClipboard(this, ' + "'" + escapeAttr(panel.pixverse_prompt) + "'" + ')">Copier</button>';
+    html += '</div>';
+  }
+
+  body.innerHTML = html;
+  overlay.classList.remove('hidden');
 }
 
-// ===== BUBBLE SELECTION =====
-function selectBubble(bubbleId, panelEl) {
-  var prevId = state.selectedBubbleId;
-
-  // Already selected — just reposition toolbar
-  if (prevId === bubbleId) {
-    showBubbleToolbar(bubbleId);
+function closePanelOverlay(e) {
+  if (!e) {
+    document.getElementById('panelOverlay').classList.add('hidden');
     return;
   }
+  document.getElementById('panelOverlay').classList.add('hidden');
+}
 
-  // Clear previous selection
-  if (prevId) {
-    var prevEl = document.getElementById(prevId);
-    if (prevEl) {
-      prevEl.classList.remove('selected');
-      prevEl.querySelectorAll('.resize-handle').forEach(function(h) { h.remove(); });
+// ===== CHARACTERS TAB =====
+function renderCharactersTab() {
+  const project = StorageManager.getProject(app.currentProjectId);
+  if (!project || !project.data) return;
+
+  const container = document.getElementById('charactersList');
+  container.innerHTML = '';
+
+  project.data.characters.forEach(function(char) {
+    const card = document.createElement('div');
+    card.className = 'char-card';
+
+    const charPhotoKey = 'char-' + char.id;
+    const photoData = project.images && project.images[charPhotoKey];
+
+    let photoHtml;
+    if (photoData) {
+      photoHtml = '<img src="' + photoData + '" alt="' + escapeAttr(char.name) + '">';
+    } else {
+      photoHtml = '<div class="char-card-photo-placeholder">&#128247; Ajouter une photo</div>';
     }
+
+    card.innerHTML =
+      '<div class="char-card-photo" onclick="triggerCharUpload(\'' + project.id + '\', \'' + char.id + '\')">' + photoHtml + '</div>' +
+      '<div class="char-card-name">' + escapeHtml(char.name) + '</div>' +
+      '<div class="char-card-role">' + escapeHtml(char.role || '') + ' — ' + (char.age || '?') + ' ans</div>' +
+      '<div class="char-card-info"><strong>Personnalité :</strong> ' + escapeHtml(char.personality || '') + '</div>' +
+      '<div class="char-card-info"><strong>Description physique :</strong></div>' +
+      '<textarea class="char-desc-edit" data-char-id="' + char.id + '" data-project-id="' + project.id + '" onchange="updateCharDescription(this)">' + escapeHtml(char.physical_description || '') + '</textarea>' +
+      '<div class="char-card-info"><strong>Prompt Pixverse :</strong></div>' +
+      '<div class="prompt-box">' + escapeHtml(char.pixverse_prompt || '') + '</div>' +
+      '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(char.pixverse_prompt || '') + "'" + ')">Copier le prompt</button>';
+
+    container.appendChild(card);
+  });
+}
+
+function updateCharDescription(textarea) {
+  const charId = textarea.dataset.charId;
+  const projectId = textarea.dataset.projectId;
+  const newDesc = textarea.value.trim();
+
+  const project = StorageManager.getProject(projectId);
+  if (!project || !project.data) return;
+
+  const char = project.data.characters.find(c => c.id === charId);
+  if (!char) return;
+
+  char.physical_description = newDesc;
+
+  // Rebuild all prompts
+  Generator.rebuildPrompts(project);
+
+  StorageManager.saveProject(project);
+
+  // Re-render tabs
+  renderCharactersTab();
+  renderPromptsTab();
+}
+
+// ===== PROMPTS TAB =====
+function renderPromptsTab() {
+  const project = StorageManager.getProject(app.currentProjectId);
+  if (!project || !project.data) return;
+
+  const container = document.getElementById('promptsList');
+  container.innerHTML = '';
+
+  // Background prompt
+  if (project.data.background_prompt) {
+    const item = document.createElement('div');
+    item.className = 'prompt-item';
+    item.innerHTML =
+      '<div class="prompt-item-header">' +
+        '<span class="prompt-item-label">Arrière-plan de référence</span>' +
+        '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(project.data.background_prompt) + "'" + ')">Copier</button>' +
+      '</div>' +
+      '<div class="prompt-item-text">' + escapeHtml(project.data.background_prompt) + '</div>';
+    container.appendChild(item);
   }
 
-  state.selectedBubbleId = bubbleId;
+  // Character prompts
+  project.data.characters.forEach(function(char) {
+    const item = document.createElement('div');
+    item.className = 'prompt-item';
+    item.innerHTML =
+      '<div class="prompt-item-header">' +
+        '<span class="prompt-item-label">&#128100; ' + escapeHtml(char.name) + '</span>' +
+        '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(char.pixverse_prompt || '') + "'" + ')">Copier</button>' +
+      '</div>' +
+      '<div class="prompt-item-text">' + escapeHtml(char.pixverse_prompt || '') + '</div>';
+    container.appendChild(item);
+  });
 
-  var el = document.getElementById(bubbleId);
-  if (!el) return;
-  el.classList.add('selected');
-
-  var found = _findBubble(bubbleId);
-  if (found.bubble) _addResizeHandles(el, found.bubble, panelEl);
-
-  showBubbleToolbar(bubbleId);
+  // Panel prompts
+  let globalPanelNum = 0;
+  project.data.episodes.forEach(function(ep) {
+    ep.panels.forEach(function(panel) {
+      globalPanelNum++;
+      const item = document.createElement('div');
+      item.className = 'prompt-item';
+      item.innerHTML =
+        '<div class="prompt-item-header">' +
+          '<span class="prompt-item-label">Case ' + globalPanelNum + ' — Ép.' + ep.number + '</span>' +
+          '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(panel.pixverse_prompt || '') + "'" + ')">Copier</button>' +
+        '</div>' +
+        '<div class="prompt-item-text">' + escapeHtml(panel.pixverse_prompt || '') + '</div>';
+      container.appendChild(item);
+    });
+  });
 }
 
-function deselectBubble() {
-  if (!state.selectedBubbleId) return;
-  var el = document.getElementById(state.selectedBubbleId);
-  if (el) {
-    el.classList.remove('selected');
-    el.querySelectorAll('.resize-handle').forEach(function(h) { h.remove(); });
-  }
-  state.selectedBubbleId = null;
-  hideBubbleToolbar();
+// ===== IMAGE UPLOAD =====
+function triggerPanelUpload(projectId, panelKey) {
+  app.pendingUpload = { projectId: projectId, panelKey: panelKey, type: 'panel' };
+  document.getElementById('imageUploadInput').click();
 }
 
-// ===== BUBBLE TOOLBAR =====
-function showBubbleToolbar(bubbleId) {
-  var el      = document.getElementById(bubbleId);
-  var toolbar = document.getElementById('bubbleToolbar');
-  if (!el || !toolbar) return;
-
-  toolbar.classList.remove('hidden');
-
-  var rect   = el.getBoundingClientRect();
-  var tbRect = toolbar.getBoundingClientRect();
-
-  var top  = rect.top - tbRect.height - 10;
-  var left = rect.left;
-  if (top  < 4) top = rect.bottom + 10;
-  if (left + tbRect.width > window.innerWidth - 4) left = window.innerWidth - tbRect.width - 4;
-  if (left < 4) left = 4;
-
-  toolbar.style.top  = top  + 'px';
-  toolbar.style.left = left + 'px';
+function triggerCharUpload(projectId, charId) {
+  app.pendingUpload = { projectId: projectId, panelKey: 'char-' + charId, type: 'character', charId: charId };
+  document.getElementById('imageUploadInput').click();
 }
 
-function hideBubbleToolbar() {
-  document.getElementById('bubbleToolbar').classList.add('hidden');
-}
+function handleImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file || !app.pendingUpload) return;
 
-// ===== BUBBLE OPERATIONS =====
-function addBubble(panelId) {
-  var found = _findPanel(panelId);
-  if (!found.panel) return;
-  var panel = found.panel;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64 = e.target.result;
+    StorageManager.saveImage(app.pendingUpload.projectId, app.pendingUpload.panelKey, base64);
 
-  var parts    = panelId.split('-');
-  var pageIdx  = parseInt(parts[1], 10);
-  var panelIdx = parseInt(parts[2], 10);
-  var n        = panel.bubbles.length;
+    // Re-render appropriate tab
+    if (app.pendingUpload.type === 'panel') {
+      renderBDTab();
+    } else {
+      renderCharactersTab();
+    }
 
-  var bubble = {
-    id:         'b-' + pageIdx + '-' + panelIdx + '-' + Date.now(),
-    type:       'standard',
-    text:       'Texte...',
-    x:          8 + (n * 18) % 60,
-    y:          8 + (n * 18) % 40,
-    width:      130,
-    height:     0,
-    autoHeight: true
+    app.pendingUpload = null;
   };
-  panel.bubbles.push(bubble);
+  reader.readAsDataURL(file);
 
-  var panelEl = document.querySelector('[data-panel-id="' + panelId + '"]');
-  if (panelEl) {
-    renderBubble(bubble, panelEl);
-    selectBubble(bubble.id, panelEl);
-  }
+  // Reset input
+  event.target.value = '';
 }
 
-function setBubbleType(type) {
-  if (!state.selectedBubbleId) return;
-  var found = _findBubble(state.selectedBubbleId);
-  if (!found.bubble) return;
-
-  var el = document.getElementById(state.selectedBubbleId);
-  if (el) {
-    el.classList.remove('right', 'thought', 'shout', 'narration');
-    var cls = _getBubbleClass(type);
-    if (cls) el.classList.add(cls);
-  }
-  found.bubble.type = type;
-  showBubbleToolbar(state.selectedBubbleId);
-}
-
-function deleteBubble() {
-  if (!state.selectedBubbleId) return;
-  var id = state.selectedBubbleId;
-  var el = document.getElementById(id);
-  if (el) el.remove();
-
-  for (var i = 0; i < state.pages.length; i++) {
-    var page = state.pages[i];
-    for (var j = 0; j < page.panels.length; j++) {
-      var panel = page.panels[j];
-      var idx = panel.bubbles.findIndex(function(b) { return b.id === id; });
-      if (idx !== -1) { panel.bubbles.splice(idx, 1); break; }
-    }
-  }
-
-  state.selectedBubbleId = null;
-  hideBubbleToolbar();
-}
-
-// ===== DRAG & RESIZE =====
-function _setupGlobalEvents() {
-  document.removeEventListener('mousemove', _onMousemove);
-  document.removeEventListener('mouseup',   _onMouseup);
-  document.addEventListener('mousemove', _onMousemove);
-  document.addEventListener('mouseup',   _onMouseup);
-}
-
-function _onMousemove(e) {
-  if (state.drag) {
-    var d = state.drag;
-    var found = _findBubble(d.bubbleId);
-    if (!found.bubble) return;
-    var bubble = found.bubble;
-
-    var dx = e.clientX - d.startX;
-    var dy = e.clientY - d.startY;
-    var panelRect = d.panelEl.getBoundingClientRect();
-    var el = document.getElementById(d.bubbleId);
-    var elH = el ? el.offsetHeight : 50;
-    var MARGIN = 6;
-
-    bubble.x = Math.max(MARGIN, Math.min(d.origX + dx, panelRect.width  - bubble.width - MARGIN));
-    bubble.y = Math.max(MARGIN, Math.min(d.origY + dy, panelRect.height - elH          - MARGIN));
-
-    if (el) {
-      el.style.left = bubble.x + 'px';
-      el.style.top  = bubble.y + 'px';
-    }
-    showBubbleToolbar(d.bubbleId);
-  }
-
-  if (state.resize) {
-    var r = state.resize;
-    var rfound = _findBubble(r.bubbleId);
-    if (!rfound.bubble) return;
-    var rbubble = rfound.bubble;
-
-    var rdx = e.clientX - r.startX;
-    var rdy = e.clientY - r.startY;
-    var MIN_W = 80, MIN_H = 30;
-
-    var newX = r.origX, newY = r.origY, newW = r.origW, newH = r.origH;
-    if (r.handle.indexOf('e') !== -1) { newW = Math.max(MIN_W, r.origW + rdx); }
-    if (r.handle.indexOf('w') !== -1) { newW = Math.max(MIN_W, r.origW - rdx); newX = r.origX + r.origW - newW; }
-    if (r.handle.indexOf('s') !== -1) { newH = Math.max(MIN_H, r.origH + rdy); }
-    if (r.handle.indexOf('n') !== -1) { newH = Math.max(MIN_H, r.origH - rdy); newY = r.origY + r.origH - newH; }
-
-    rbubble.x = newX; rbubble.y = newY;
-    rbubble.width = newW; rbubble.height = newH;
-
-    var rel = document.getElementById(r.bubbleId);
-    if (rel) {
-      rel.style.left   = newX + 'px';
-      rel.style.top    = newY + 'px';
-      rel.style.width  = newW + 'px';
-      rel.style.height = newH + 'px';
-    }
-    showBubbleToolbar(r.bubbleId);
-  }
-}
-
-function _onMouseup() {
-  state.drag   = null;
-  state.resize = null;
-  document.body.style.cursor = '';
-}
-
-// ===== PREVIEW CLICK (deselect on background click) =====
-function handlePreviewClick(e) {
-  if (!e.target.closest('.bubble')) {
-    deselectBubble();
-  }
-}
-
-// ===== PAGE NAVIGATION =====
-function editorChangePage(delta) {
-  var newIdx = state.currentPageIndex + delta;
-  if (newIdx < 0 || newIdx >= state.pageCount) return;
-  deselectBubble();
-  state.currentPageIndex = newIdx;
-  renderEditor();
+// ===== COPY TO CLIPBOARD =====
+function copyToClipboard(btnEl, text) {
+  navigator.clipboard.writeText(text).then(function() {
+    const orig = btnEl.textContent;
+    btnEl.textContent = '✓ Copié !';
+    btnEl.classList.add('copied');
+    setTimeout(function() {
+      btnEl.textContent = orig;
+      btnEl.classList.remove('copied');
+    }, 1500);
+  }).catch(function() {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const orig = btnEl.textContent;
+    btnEl.textContent = '✓ Copié !';
+    btnEl.classList.add('copied');
+    setTimeout(function() {
+      btnEl.textContent = orig;
+      btnEl.classList.remove('copied');
+    }, 1500);
+  });
 }
 
 // ===== HELPERS =====
-function _findBubble(bubbleId) {
-  for (var i = 0; i < state.pages.length; i++) {
-    var page = state.pages[i];
-    for (var j = 0; j < page.panels.length; j++) {
-      var panel = page.panels[j];
-      for (var k = 0; k < panel.bubbles.length; k++) {
-        if (panel.bubbles[k].id === bubbleId) {
-          return { bubble: panel.bubbles[k], panel: panel, page: page };
-        }
-      }
-    }
-  }
-  return { bubble: null, panel: null, page: null };
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function _findPanel(panelId) {
-  for (var i = 0; i < state.pages.length; i++) {
-    var page = state.pages[i];
-    for (var j = 0; j < page.panels.length; j++) {
-      if (page.panels[j].id === panelId) {
-        return { panel: page.panels[j], page: page };
-      }
-    }
-  }
-  return { panel: null, page: null };
+function escapeAttr(str) {
+  if (!str) return '';
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ');
 }
+
+// ===== START =====
+document.addEventListener('DOMContentLoaded', initApp);
