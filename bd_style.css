@@ -400,7 +400,96 @@ body {
   border-style: solid;
 }
 .btn-generate { align-self: center; margin-top: 10px; }
-.form-textarea-lg { min-height: 100px; font-size: 0.95rem; }
+
+/* Creation Steps */
+.creation-step {
+  background: var(--bg-panel);
+  border: 2px solid var(--border-light);
+  border-radius: 6px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.step-number {
+  width: 30px;
+  height: 30px;
+  background: var(--red);
+  color: var(--gold-light);
+  font-family: 'Bangers', cursive;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.step-label {
+  font-family: 'Bangers', cursive;
+  font-size: 1.1rem;
+  color: var(--gold-light);
+  letter-spacing: 2px;
+}
+.step-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.btn-idea {
+  align-self: center;
+}
+
+/* Idea Result */
+.idea-result {
+  background: var(--bg);
+  border: 2px solid var(--gold);
+  border-radius: 6px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.idea-title {
+  font-family: 'Bangers', cursive;
+  font-size: 1.5rem;
+  color: var(--gold-light);
+  letter-spacing: 2px;
+  text-shadow: 1px 1px 0 var(--red);
+}
+.idea-summary {
+  font-family: 'Crimson Pro', serif;
+  font-style: italic;
+  font-size: 1rem;
+  color: #ccc;
+  line-height: 1.6;
+}
+.btn-reroll {
+  background: none;
+  border: 1px dashed var(--gold);
+  color: var(--gold);
+  padding: 6px 16px;
+  font-family: 'Special Elite', serif;
+  font-size: 0.82rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  align-self: flex-end;
+}
+.btn-reroll:hover {
+  background: var(--gold);
+  color: var(--bg);
+  border-style: solid;
+}
 
 /* No API key warning */
 .no-api-warning {

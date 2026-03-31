@@ -117,8 +117,12 @@ function openProject(id) {
 }
 
 // ===== CREATION FORM =====
+let currentIdea = null; // { title, summary }
+
 function resetCreationForm() {
-  document.getElementById('inputIdea').value = '';
+  currentIdea = null;
+  document.getElementById('ideaResult').classList.add('hidden');
+  document.getElementById('stepThemes').classList.add('hidden');
   document.querySelectorAll('.theme-checkboxes input').forEach(cb => { cb.checked = false; });
 
   // Show warning if no API key
@@ -131,15 +135,44 @@ function resetCreationForm() {
   }
 }
 
+// ===== ÉTAPE 1 : GÉNÉRER UNE IDÉE =====
+function generateIdea() {
+  const apiKey = StorageManager.getApiKey();
+  if (!apiKey) {
+    alert('Aucune clé API configurée. Allez dans Paramètres sur la page Bibliothèque.');
+    return;
+  }
+
+  const btn = document.querySelector('.btn-idea');
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '&#9881; Claude réfléchit...';
+
+  Generator.generateIdea(apiKey).then(function(data) {
+    currentIdea = data;
+    document.getElementById('ideaTitle').textContent = data.title;
+    document.getElementById('ideaSummary').textContent = data.summary;
+    document.getElementById('ideaResult').classList.remove('hidden');
+    document.getElementById('stepThemes').classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = origText;
+  }).catch(function(err) {
+    alert('Erreur : ' + err.message);
+    btn.disabled = false;
+    btn.innerHTML = origText;
+  });
+}
+
 // ===== GENERATION =====
 let generationAborted = false;
 
 function startGeneration() {
-  // Validate
-  const idea = document.getElementById('inputIdea').value.trim();
-  const apiKey = StorageManager.getApiKey();
+  if (!currentIdea) {
+    alert('Générez d\'abord une idée.');
+    return;
+  }
 
-  if (!idea) { alert('Décrivez votre idée de micro-drame.'); return; }
+  const apiKey = StorageManager.getApiKey();
   if (!apiKey) {
     alert('Aucune clé API configurée. Allez dans Paramètres sur la page Bibliothèque.');
     return;
@@ -160,7 +193,7 @@ function startGeneration() {
   document.getElementById('genProgressFill').style.width = '0%';
   document.getElementById('genMessage').textContent = 'Préparation...';
 
-  const params = { idea: idea, themes: themes };
+  const params = { title: currentIdea.title, summary: currentIdea.summary, themes: themes };
 
   Generator.generateDrama(params, apiKey, function(message, percent) {
     if (generationAborted) return;
@@ -169,12 +202,11 @@ function startGeneration() {
   }).then(function(data) {
     if (generationAborted) return;
 
-    // Create project — title comes from Claude's response
     const project = {
       id: StorageManager.generateId(),
-      title: data.title || 'Sans titre',
+      title: data.title || currentIdea.title,
       setting: data.setting || '',
-      description: idea,
+      description: currentIdea.summary,
       themes: themes,
       data: data,
       images: {}
