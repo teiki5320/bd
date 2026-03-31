@@ -3,138 +3,202 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Créateur de BD — Le Masque d'Anansi</title>
+  <title>Micro-Drama BD Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Crimson+Pro:ital@1&family=Special+Elite&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="bd_style.css">
 </head>
 <body>
 
-<!-- COVER -->
-<div id="cover" class="screen active">
-  <div class="cover-bg">
-    <svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" class="cover-art">
-      <defs>
-        <radialGradient id="sunGrad" cx="50%" cy="30%" r="60%">
-          <stop offset="0%" stop-color="#FF6B00"/>
-          <stop offset="60%" stop-color="#CC2200"/>
-          <stop offset="100%" stop-color="#1a0a00"/>
-        </radialGradient>
-        <radialGradient id="maskGlow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#FFD700" stop-opacity="0.8"/>
-          <stop offset="100%" stop-color="#FF6B00" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-      <rect width="800" height="600" fill="url(#sunGrad)"/>
-      <circle cx="400" cy="180" r="70" fill="#FFD700" opacity="0.9"/>
-      <circle cx="400" cy="180" r="90" fill="url(#maskGlow)"/>
-      <rect x="50" y="380" width="30" height="220" fill="#1a0a00"/>
-      <ellipse cx="65" cy="380" rx="70" ry="50" fill="#1a0a00"/>
-      <rect x="700" y="350" width="40" height="250" fill="#1a0a00"/>
-      <ellipse cx="720" cy="350" rx="80" ry="55" fill="#1a0a00"/>
-      <rect x="680" y="360" width="20" height="240" fill="#1a0a00"/>
-      <ellipse cx="400" cy="310" rx="25" ry="30" fill="#1a0a00"/>
-      <rect x="385" y="335" width="30" height="80" fill="#1a0a00"/>
-      <line x1="385" y1="355" x2="360" y2="390" stroke="#1a0a00" stroke-width="8" stroke-linecap="round"/>
-      <line x1="415" y1="355" x2="440" y2="390" stroke="#1a0a00" stroke-width="8" stroke-linecap="round"/>
-      <line x1="393" y1="415" x2="385" y2="460" stroke="#1a0a00" stroke-width="8" stroke-linecap="round"/>
-      <line x1="407" y1="415" x2="415" y2="460" stroke="#1a0a00" stroke-width="8" stroke-linecap="round"/>
-      <ellipse cx="360" cy="340" rx="22" ry="28" fill="#FFD700" opacity="0.95"/>
-      <circle cx="353" cy="333" r="5" fill="#1a0a00"/>
-      <circle cx="367" cy="333" r="5" fill="#1a0a00"/>
-      <path d="M350 347 Q360 355 370 347" stroke="#1a0a00" stroke-width="2" fill="none"/>
-      <circle cx="360" cy="340" r="35" fill="#FFD700" opacity="0.3"/>
-      <circle cx="360" cy="340" r="50" fill="#FF6B00" opacity="0.15"/>
-      <ellipse cx="400" cy="560" rx="400" ry="80" fill="#3d1f00"/>
-      <circle cx="100" cy="80" r="2" fill="white" opacity="0.8"/>
-      <circle cx="200" cy="50" r="1.5" fill="white" opacity="0.6"/>
-      <circle cx="600" cy="70" r="2" fill="white" opacity="0.8"/>
-      <circle cx="700" cy="100" r="1.5" fill="white" opacity="0.6"/>
-      <circle cx="150" cy="130" r="1" fill="white" opacity="0.5"/>
-      <circle cx="650" cy="40" r="2" fill="white" opacity="0.7"/>
-    </svg>
-    <div class="cover-text">
-      <div class="cover-subtitle">Une aventure en Afrique subsaharienne</div>
-      <h1 class="cover-title">LE MASQUE<br>D'ANANSI</h1>
-      <div class="cover-author">Créateur de BD interactif</div>
-      <button class="btn-start" onclick="showSetup()">&#9654; CRÉER MA BD</button>
+<!-- ============ ÉCRAN 1 : BIBLIOTHÈQUE ============ -->
+<div id="library" class="screen active">
+  <div class="library-wrapper">
+    <header class="library-header">
+      <h1 class="library-title">Micro-Drama BD</h1>
+      <p class="library-subtitle">Générateur de BD alimenté par Claude AI</p>
+    </header>
+
+    <button class="btn-primary btn-new-project" onclick="showCreation()">
+      + Nouveau micro-drame
+    </button>
+
+    <div id="projectList" class="project-grid">
+      <!-- Filled by JS -->
+    </div>
+
+    <div id="emptyLibrary" class="empty-library hidden">
+      <div class="empty-icon">&#128218;</div>
+      <p>Aucun projet pour l'instant.</p>
+      <p class="empty-hint">Créez votre premier micro-drame africain !</p>
     </div>
   </div>
 </div>
 
-<!-- SETUP -->
-<div id="setup" class="screen">
-  <div class="setup-inner">
-    <button class="btn-nav setup-back" onclick="showCover()">&#8592; Retour</button>
-    <h2 class="setup-title">Créer une BD</h2>
-    <div class="setup-label">Nombre de pages</div>
-    <div class="setup-picker">
-      <button class="btn-picker" onclick="adjustPageCount(-1)">&#8722;</button>
-      <span id="pageCountDisplay">5</span>
-      <button class="btn-picker" onclick="adjustPageCount(1)">+</button>
-    </div>
-    <input type="range" id="pageCountSlider" min="1" max="20" value="5"
-           oninput="syncPageCount(this.value)">
-    <div class="setup-hint">1 à 20 pages</div>
-    <button class="btn-start" onclick="createComic()">&#10022; CRÉER</button>
+<!-- ============ ÉCRAN 2 : CRÉATION / PARAMÈTRES ============ -->
+<div id="creation" class="screen">
+  <div class="creation-wrapper">
+    <button class="btn-back" onclick="showLibrary()">&#8592; Bibliothèque</button>
+    <h2 class="creation-title">Nouveau Micro-Drame</h2>
+
+    <form id="creationForm" class="creation-form" onsubmit="return false;">
+      <!-- Titre -->
+      <div class="form-group">
+        <label class="form-label" for="inputTitle">Titre du micro-drame</label>
+        <input type="text" id="inputTitle" class="form-input" placeholder="Ex: La Fille du Quartier" required>
+      </div>
+
+      <!-- Description -->
+      <div class="form-group">
+        <label class="form-label" for="inputDescription">Description de l'histoire</label>
+        <textarea id="inputDescription" class="form-textarea" rows="3" placeholder="Décrivez l'intrigue en 2-3 lignes..." required></textarea>
+      </div>
+
+      <!-- Ville / Contexte -->
+      <div class="form-group">
+        <label class="form-label" for="inputSetting">Ville / Contexte</label>
+        <input type="text" id="inputSetting" class="form-input" placeholder="Ex: Bakara, ville fictive africaine">
+      </div>
+
+      <!-- Épisodes & Cases -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="inputEpisodes">Nombre d'épisodes</label>
+          <select id="inputEpisodes" class="form-select">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="inputPanels">Cases par épisode</label>
+          <select id="inputPanels" class="form-select">
+            <option value="10">10</option>
+            <option value="12">12</option>
+            <option value="15" selected>15</option>
+            <option value="18">18</option>
+            <option value="20">20</option>
+            <option value="25">25</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Thèmes -->
+      <div class="form-group">
+        <label class="form-label">Thèmes</label>
+        <div class="theme-checkboxes">
+          <label class="checkbox-label"><input type="checkbox" value="Romance interdite"> Romance interdite</label>
+          <label class="checkbox-label"><input type="checkbox" value="Vengeance"> Vengeance</label>
+          <label class="checkbox-label"><input type="checkbox" value="Ascension sociale"> Ascension sociale</label>
+          <label class="checkbox-label"><input type="checkbox" value="Secrets de famille"> Secrets de famille</label>
+        </div>
+      </div>
+
+      <!-- Personnages -->
+      <div class="form-group">
+        <label class="form-label">Personnages <span class="form-hint">(jusqu'à 6)</span></label>
+        <div id="characterFields" class="character-fields">
+          <!-- Filled by JS -->
+        </div>
+        <button type="button" class="btn-add-char" id="btnAddChar" onclick="addCharacterField()">+ Ajouter un personnage</button>
+      </div>
+
+      <!-- Clé API -->
+      <div class="form-group">
+        <label class="form-label" for="inputApiKey">Clé API Claude</label>
+        <input type="password" id="inputApiKey" class="form-input" placeholder="sk-ant-..." required>
+        <span class="form-hint">Stockée localement dans votre navigateur</span>
+      </div>
+
+      <!-- Bouton Générer -->
+      <button type="button" class="btn-primary btn-generate" onclick="startGeneration()">
+        &#10022; Générer avec Claude
+      </button>
+    </form>
   </div>
 </div>
 
-<!-- EDITOR -->
-<div id="editor" class="screen">
-
-  <!-- TOOLBAR -->
-  <header class="editor-toolbar">
-    <button class="btn-nav" onclick="showSetup()">&#8592; Recommencer</button>
-
-    <div class="toolbar-sep"></div>
-
-    <div class="toolbar-group">
-      <span class="toolbar-label">Disposition&nbsp;:</span>
-      <button class="btn-layout active" data-layout="grid-4" onclick="setLayout('grid-4')" title="2×2 cases">⊞&nbsp;4</button>
-      <button class="btn-layout" data-layout="grid-5" onclick="setLayout('grid-5')" title="5 cases (3+2)">⊞&nbsp;5</button>
-      <button class="btn-layout" data-layout="grid-6" onclick="setLayout('grid-6')" title="3×2 cases">⊞&nbsp;6</button>
-      <button class="btn-layout" data-layout="grid-2" onclick="setLayout('grid-2')" title="2 cases côte à côte">&#9644;&nbsp;2</button>
-      <button class="btn-layout" data-layout="full"   onclick="setLayout('full')"   title="Pleine page">&#9633;&nbsp;1</button>
+<!-- ============ ÉCRAN 3 : GÉNÉRATION EN COURS ============ -->
+<div id="generating" class="screen">
+  <div class="generating-wrapper">
+    <div class="generating-icon">&#9881;</div>
+    <h2 class="generating-title" id="genTitle">Génération en cours...</h2>
+    <p class="generating-message" id="genMessage">Préparation...</p>
+    <div class="progress-bar-wrapper">
+      <div class="progress-bar-gen">
+        <div class="progress-fill-gen" id="genProgressFill" style="width:0%"></div>
+      </div>
     </div>
+    <p class="generating-hint">Cela peut prendre 30 à 60 secondes</p>
+    <button class="btn-back btn-cancel-gen hidden" id="btnCancelGen" onclick="cancelGeneration()">Annuler</button>
+    <div id="genError" class="gen-error hidden"></div>
+  </div>
+</div>
 
-    <div class="toolbar-sep"></div>
-
-    <div class="toolbar-group">
-      <button class="btn-nav-sm" id="editorPrev" onclick="editorChangePage(-1)">&#9664;</button>
-      <span class="page-indicator">Page&nbsp;<span id="editorCurrentPage">1</span>&nbsp;/&nbsp;<span id="editorTotalPages">5</span></span>
-      <button class="btn-nav-sm" id="editorNext" onclick="editorChangePage(1)">&#9654;</button>
-    </div>
+<!-- ============ ÉCRAN 4 : VISIONNEUSE BD ============ -->
+<div id="viewer" class="screen">
+  <header class="viewer-header">
+    <button class="btn-back" onclick="showLibrary()">&#8592; Bibliothèque</button>
+    <h2 class="viewer-title" id="viewerTitle">—</h2>
   </header>
 
-  <!-- SPLIT VIEW -->
-  <div class="editor-body">
+  <!-- Onglets -->
+  <nav class="viewer-tabs">
+    <button class="tab-btn active" data-tab="bd" onclick="switchTab('bd')">&#127916; BD</button>
+    <button class="tab-btn" data-tab="characters" onclick="switchTab('characters')">&#128100; Personnages</button>
+    <button class="tab-btn" data-tab="prompts" onclick="switchTab('prompts')">&#128203; Prompts</button>
+  </nav>
 
-    <!-- LEFT: Script pane -->
-    <aside class="script-pane">
-      <div class="script-pane-header">Script — Page <span id="scriptPageLabel">1</span></div>
-      <div id="scriptPanelList" class="script-panel-list"></div>
-    </aside>
+  <!-- Onglet BD -->
+  <div id="tabBD" class="tab-content active">
+    <!-- Navigation épisodes -->
+    <div class="episode-nav">
+      <button class="btn-ep-nav" id="btnPrevEp" onclick="changeEpisode(-1)">&#9664; Précédent</button>
+      <span class="episode-indicator" id="episodeIndicator">Épisode 1 / 1</span>
+      <button class="btn-ep-nav" id="btnNextEp" onclick="changeEpisode(1)">Suivant &#9654;</button>
+    </div>
+    <h3 class="episode-title" id="episodeTitle"></h3>
+    <div id="bdGrid" class="bd-grid">
+      <!-- Filled by JS -->
+    </div>
+    <div class="cliffhanger-banner hidden" id="cliffhangerBanner"></div>
+  </div>
 
-    <!-- RIGHT: Preview pane -->
-    <main class="preview-pane" onclick="handlePreviewClick(event)">
-      <div class="preview-stage">
-        <div id="editorComicPage" class="comic-page"></div>
-      </div>
-    </main>
+  <!-- Onglet Personnages -->
+  <div id="tabCharacters" class="tab-content">
+    <div id="charactersList" class="characters-list">
+      <!-- Filled by JS -->
+    </div>
+  </div>
 
+  <!-- Onglet Prompts -->
+  <div id="tabPrompts" class="tab-content">
+    <div id="promptsList" class="prompts-list">
+      <!-- Filled by JS -->
+    </div>
   </div>
 </div>
 
-<!-- BUBBLE TOOLBAR (floating, fixed) -->
-<div id="bubbleToolbar" class="bubble-toolbar hidden">
-  <button onclick="setBubbleType('standard')" title="Bulle normale">&#128172;</button>
-  <button onclick="setBubbleType('right')"    title="Bulle queue à droite">&#128172;&#8594;</button>
-  <button onclick="setBubbleType('thought')"  title="Bulle pensée">&#128173;</button>
-  <button onclick="setBubbleType('shout')"    title="Cri / exclamation">&#128226;</button>
-  <button onclick="setBubbleType('narration')" title="Narration / légende">&#128214;</button>
-  <div class="bubble-toolbar-sep"></div>
-  <button class="btn-delete-bubble" onclick="deleteBubble()" title="Supprimer la bulle">&#10005;</button>
+<!-- ============ OVERLAY DÉTAIL CASE ============ -->
+<div id="panelOverlay" class="panel-overlay hidden" onclick="closePanelOverlay(event)">
+  <div class="overlay-content" onclick="event.stopPropagation()">
+    <button class="overlay-close" onclick="closePanelOverlay()">&times;</button>
+    <div id="overlayBody"></div>
+  </div>
 </div>
 
+<!-- Hidden file input for image uploads -->
+<input type="file" id="imageUploadInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+
+<script src="storage.js"></script>
+<script src="generator.js"></script>
 <script src="bd_script.js"></script>
 </body>
 </html>
