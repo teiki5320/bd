@@ -27,12 +27,37 @@ function showCreation() {
 
 // ===== INIT =====
 function initApp() {
-  // Load saved API key
+  // Load saved API key into settings panel
   const savedKey = StorageManager.getApiKey();
   if (savedKey) {
-    document.getElementById('inputApiKey').value = savedKey;
+    document.getElementById('settingsApiKey').value = savedKey;
   }
   renderLibrary();
+}
+
+// ===== SETTINGS =====
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  panel.classList.toggle('hidden');
+  if (!panel.classList.contains('hidden')) {
+    const savedKey = StorageManager.getApiKey();
+    document.getElementById('settingsApiKey').value = savedKey;
+  }
+}
+
+function toggleApiKeyVisibility() {
+  const input = document.getElementById('settingsApiKey');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function saveSettings() {
+  const key = document.getElementById('settingsApiKey').value.trim();
+  StorageManager.setApiKey(key);
+  const btn = document.querySelector('.btn-save-settings');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Enregistré !';
+  btn.style.background = 'var(--green)';
+  setTimeout(function() { btn.textContent = orig; }, 1500);
 }
 
 // ===== LIBRARY =====
@@ -93,48 +118,16 @@ function openProject(id) {
 
 // ===== CREATION FORM =====
 function resetCreationForm() {
-  document.getElementById('inputTitle').value = '';
-  document.getElementById('inputDescription').value = '';
-  document.getElementById('inputSetting').value = '';
-  document.getElementById('inputEpisodes').value = '3';
-  document.getElementById('inputPanels').value = '15';
+  document.getElementById('inputIdea').value = '';
   document.querySelectorAll('.theme-checkboxes input').forEach(cb => { cb.checked = false; });
 
-  const charFields = document.getElementById('characterFields');
-  charFields.innerHTML = '';
-  // Add 2 default character fields
-  addCharacterField();
-  addCharacterField();
-
-  // Restore API key
-  const savedKey = StorageManager.getApiKey();
-  if (savedKey) {
-    document.getElementById('inputApiKey').value = savedKey;
-  }
-}
-
-function addCharacterField() {
-  const container = document.getElementById('characterFields');
-  if (container.children.length >= 6) return;
-
-  const row = document.createElement('div');
-  row.className = 'char-field-row';
-  row.innerHTML =
-    '<input type="text" class="form-input char-name" placeholder="Nom">' +
-    '<input type="text" class="form-input char-desc" placeholder="Description physique (ex: femme de 25 ans, grande, peau ébène...)">' +
-    '<button type="button" class="btn-remove-char" onclick="this.parentElement.remove();updateAddCharBtn()">&times;</button>';
-
-  container.appendChild(row);
-  updateAddCharBtn();
-}
-
-function updateAddCharBtn() {
-  const count = document.getElementById('characterFields').children.length;
-  const btn = document.getElementById('btnAddChar');
-  if (count >= 6) {
-    btn.classList.add('hidden');
+  // Show warning if no API key
+  const apiKey = StorageManager.getApiKey();
+  const warning = document.getElementById('noApiKeyWarning');
+  if (!apiKey) {
+    warning.classList.remove('hidden');
   } else {
-    btn.classList.remove('hidden');
+    warning.classList.add('hidden');
   }
 }
 
@@ -143,16 +136,14 @@ let generationAborted = false;
 
 function startGeneration() {
   // Validate
-  const title = document.getElementById('inputTitle').value.trim();
-  const description = document.getElementById('inputDescription').value.trim();
-  const setting = document.getElementById('inputSetting').value.trim();
-  const episodes = parseInt(document.getElementById('inputEpisodes').value);
-  const panelsPerEpisode = parseInt(document.getElementById('inputPanels').value);
-  const apiKey = document.getElementById('inputApiKey').value.trim();
+  const idea = document.getElementById('inputIdea').value.trim();
+  const apiKey = StorageManager.getApiKey();
 
-  if (!title) { alert('Veuillez entrer un titre.'); return; }
-  if (!description) { alert('Veuillez décrire l\'histoire.'); return; }
-  if (!apiKey) { alert('Veuillez entrer votre clé API Claude.'); return; }
+  if (!idea) { alert('Décrivez votre idée de micro-drame.'); return; }
+  if (!apiKey) {
+    alert('Aucune clé API configurée. Allez dans Paramètres sur la page Bibliothèque.');
+    return;
+  }
 
   // Themes
   const themes = [];
@@ -160,33 +151,16 @@ function startGeneration() {
     themes.push(cb.value);
   });
 
-  // Characters
-  const characters = [];
-  document.querySelectorAll('.char-field-row').forEach(row => {
-    const name = row.querySelector('.char-name').value.trim();
-    const desc = row.querySelector('.char-desc').value.trim();
-    if (name) {
-      characters.push({ name: name, description: desc || 'non spécifié' });
-    }
-  });
-
-  if (characters.length === 0) {
-    alert('Ajoutez au moins un personnage.');
-    return;
-  }
-
-  // Save API key
-  StorageManager.setApiKey(apiKey);
-
   // Switch to generation screen
   showScreen('generating');
   generationAborted = false;
   document.getElementById('genError').classList.add('hidden');
   document.getElementById('btnCancelGen').classList.remove('hidden');
+  document.getElementById('btnCancelGen').textContent = 'Annuler';
   document.getElementById('genProgressFill').style.width = '0%';
   document.getElementById('genMessage').textContent = 'Préparation...';
 
-  const params = { title, description, setting, episodes, panelsPerEpisode, themes, characters };
+  const params = { idea: idea, themes: themes };
 
   Generator.generateDrama(params, apiKey, function(message, percent) {
     if (generationAborted) return;
@@ -195,12 +169,12 @@ function startGeneration() {
   }).then(function(data) {
     if (generationAborted) return;
 
-    // Create project
+    // Create project — title comes from Claude's response
     const project = {
       id: StorageManager.generateId(),
-      title: title,
-      setting: setting,
-      description: description,
+      title: data.title || 'Sans titre',
+      setting: data.setting || '',
+      description: idea,
       themes: themes,
       data: data,
       images: {}
