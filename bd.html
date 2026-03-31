@@ -61,47 +61,68 @@
     <h2 class="creation-title">Nouveau Micro-Drame</h2>
 
     <form id="creationForm" class="creation-form" onsubmit="return false;">
-      <!-- Idée -->
-      <div class="form-group">
-        <label class="form-label" for="inputIdea">Votre idée de micro-drame</label>
-        <textarea id="inputIdea" class="form-textarea form-textarea-lg" rows="4" placeholder="Décrivez votre idée en quelques lignes... Ex: Une jeune coiffeuse découvre que sa meilleure cliente est en réalité la maîtresse de son mari. Le quartier entier prend parti..." required></textarea>
-        <span class="form-hint">Claude inventera le titre, les personnages, le découpage et les dialogues</span>
-      </div>
 
-      <!-- Thèmes -->
-      <div class="form-group">
-        <label class="form-label">Thèmes <span class="form-hint">(choisissez un ou plusieurs)</span></label>
-        <div class="theme-checkboxes">
-          <label class="checkbox-label"><input type="checkbox" value="Romance interdite"> Romance interdite</label>
-          <label class="checkbox-label"><input type="checkbox" value="Vengeance"> Vengeance</label>
-          <label class="checkbox-label"><input type="checkbox" value="Trahison"> Trahison</label>
-          <label class="checkbox-label"><input type="checkbox" value="Ascension sociale"> Ascension sociale</label>
-          <label class="checkbox-label"><input type="checkbox" value="Secrets de famille"> Secrets de famille</label>
-          <label class="checkbox-label"><input type="checkbox" value="Rivalité entre femmes"> Rivalité entre femmes</label>
-          <label class="checkbox-label"><input type="checkbox" value="Mariage forcé"> Mariage forcé</label>
-          <label class="checkbox-label"><input type="checkbox" value="Double vie"> Double vie</label>
-          <label class="checkbox-label"><input type="checkbox" value="Héritage contesté"> Héritage contesté</label>
-          <label class="checkbox-label"><input type="checkbox" value="Retour au village"> Retour au village</label>
-          <label class="checkbox-label"><input type="checkbox" value="Jalousie"> Jalousie</label>
-          <label class="checkbox-label"><input type="checkbox" value="Rédemption"> Rédemption</label>
-          <label class="checkbox-label"><input type="checkbox" value="Amour impossible"> Amour impossible</label>
-          <label class="checkbox-label"><input type="checkbox" value="Mensonge dévoilé"> Mensonge dévoilé</label>
-          <label class="checkbox-label"><input type="checkbox" value="Pouvoir et corruption"> Pouvoir et corruption</label>
-          <label class="checkbox-label"><input type="checkbox" value="Sorcellerie / Mystique"> Sorcellerie / Mystique</label>
-          <label class="checkbox-label"><input type="checkbox" value="Grossesse cachée"> Grossesse cachée</label>
-          <label class="checkbox-label"><input type="checkbox" value="Arnaque sentimentale"> Arnaque sentimentale</label>
+      <!-- ÉTAPE 1 : Générer une idée -->
+      <div id="stepIdea" class="creation-step">
+        <div class="step-header">
+          <span class="step-number">1</span>
+          <span class="step-label">Obtenir une idée</span>
+        </div>
+
+        <!-- Avertissement clé API -->
+        <div id="noApiKeyWarning" class="no-api-warning hidden">
+          &#9888; Aucune clé API configurée. <a href="#" onclick="showLibrary();setTimeout(toggleSettings,200);return false;">Allez dans Paramètres</a> pour l'ajouter.
+        </div>
+
+        <p class="step-desc">Claude invente un titre et un pitch de micro-drame africain</p>
+        <button type="button" class="btn-primary btn-idea" onclick="generateIdea()">
+          &#9889; Générer une idée
+        </button>
+
+        <!-- Résultat idée -->
+        <div id="ideaResult" class="idea-result hidden">
+          <div class="idea-title" id="ideaTitle"></div>
+          <div class="idea-summary" id="ideaSummary"></div>
+          <button type="button" class="btn-reroll" onclick="generateIdea()">&#8635; Autre idée</button>
         </div>
       </div>
 
-      <!-- Avertissement clé API -->
-      <div id="noApiKeyWarning" class="no-api-warning hidden">
-        &#9888; Aucune clé API configurée. <a href="#" onclick="showLibrary();setTimeout(toggleSettings,200);return false;">Allez dans Paramètres</a> pour l'ajouter.
+      <!-- ÉTAPE 2 : Choisir thèmes + Générer (visible après étape 1) -->
+      <div id="stepThemes" class="creation-step hidden">
+        <div class="step-header">
+          <span class="step-number">2</span>
+          <span class="step-label">Choisir les thèmes et générer</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Thèmes <span class="form-hint">(choisissez un ou plusieurs)</span></label>
+          <div class="theme-checkboxes">
+            <label class="checkbox-label"><input type="checkbox" value="Romance interdite"> Romance interdite</label>
+            <label class="checkbox-label"><input type="checkbox" value="Vengeance"> Vengeance</label>
+            <label class="checkbox-label"><input type="checkbox" value="Trahison"> Trahison</label>
+            <label class="checkbox-label"><input type="checkbox" value="Ascension sociale"> Ascension sociale</label>
+            <label class="checkbox-label"><input type="checkbox" value="Secrets de famille"> Secrets de famille</label>
+            <label class="checkbox-label"><input type="checkbox" value="Rivalité entre femmes"> Rivalité entre femmes</label>
+            <label class="checkbox-label"><input type="checkbox" value="Mariage forcé"> Mariage forcé</label>
+            <label class="checkbox-label"><input type="checkbox" value="Double vie"> Double vie</label>
+            <label class="checkbox-label"><input type="checkbox" value="Héritage contesté"> Héritage contesté</label>
+            <label class="checkbox-label"><input type="checkbox" value="Retour au village"> Retour au village</label>
+            <label class="checkbox-label"><input type="checkbox" value="Jalousie"> Jalousie</label>
+            <label class="checkbox-label"><input type="checkbox" value="Rédemption"> Rédemption</label>
+            <label class="checkbox-label"><input type="checkbox" value="Amour impossible"> Amour impossible</label>
+            <label class="checkbox-label"><input type="checkbox" value="Mensonge dévoilé"> Mensonge dévoilé</label>
+            <label class="checkbox-label"><input type="checkbox" value="Pouvoir et corruption"> Pouvoir et corruption</label>
+            <label class="checkbox-label"><input type="checkbox" value="Sorcellerie / Mystique"> Sorcellerie / Mystique</label>
+            <label class="checkbox-label"><input type="checkbox" value="Grossesse cachée"> Grossesse cachée</label>
+            <label class="checkbox-label"><input type="checkbox" value="Arnaque sentimentale"> Arnaque sentimentale</label>
+          </div>
+        </div>
+
+        <button type="button" class="btn-primary btn-generate" onclick="startGeneration()">
+          &#10022; Générer la BD complète
+        </button>
       </div>
 
-      <!-- Bouton Générer -->
-      <button type="button" class="btn-primary btn-generate" onclick="startGeneration()">
-        &#10022; Générer avec Claude
-      </button>
     </form>
   </div>
 </div>

@@ -5,20 +5,69 @@ const Generator = {
 
   FIXED_STYLE: 'realistic comic book style, dramatic lighting, cinematic composition, warm African color palette, detailed linework, strong shadows',
 
-  async generateDrama(params, apiKey, onProgress) {
-    const { idea, themes } = params;
+  // ===== ÉTAPE 1 : Générer une idée (titre + résumé) =====
+  async generateIdea(apiKey) {
+    const systemPrompt = "Tu es un créateur de concepts pour des micro-drames africains style drama TikTok/Reels. Tu inventes des histoires captivantes avec des rebondissements. Réponds UNIQUEMENT en JSON valide, aucun texte avant ou après.";
 
-    onProgress('Claude analyse votre idée...', 5);
+    const userMessage = `Invente une idée originale de micro-drame africain. Le drame doit être intense, avec des retournements de situation, des personnages forts, et se dérouler dans un contexte africain contemporain (quartier populaire, ville fictive, etc.).
+
+Réponds avec ce JSON exact :
+{
+  "title": "string — titre accrocheur du micro-drame",
+  "summary": "string — résumé du pitch en 3-4 phrases, captivant, qui donne envie de lire la suite"
+}`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }]
+      })
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) throw new Error('Clé API invalide. Vérifiez dans Paramètres.');
+      if (response.status === 429) throw new Error('Trop de requêtes. Attendez un moment.');
+      const errBody = await response.json().catch(() => ({}));
+      throw new Error(errBody.error?.message || `Erreur API (${response.status})`);
+    }
+
+    const result = await response.json();
+    const text = result.content && result.content[0] && result.content[0].text;
+    if (!text) throw new Error('Réponse vide de Claude.');
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Pas de JSON trouvé.');
+    const data = JSON.parse(jsonMatch[0]);
+
+    if (!data.title || !data.summary) throw new Error('Réponse incomplète.');
+    return data;
+  },
+
+  // ===== ÉTAPE 2 : Générer la BD complète =====
+  async generateDrama(params, apiKey, onProgress) {
+    const { title, summary, themes } = params;
+
+    onProgress('Claude analyse l\'histoire...', 5);
     await this._wait(800);
 
     const themeBlock = themes.length > 0 ? `\nThèmes choisis par l'utilisateur : ${themes.join(', ')}` : '';
 
-    const userMessage = `Voici l'idée de micro-drame de l'utilisateur :
+    const userMessage = `Voici le micro-drame à développer en BD complète :
 
-"${idea}"
+Titre : ${title}
+Pitch : ${summary}
 ${themeBlock}
 
-À partir de cette idée, crée un micro-drame BD COMPLET. Tu décides de TOUT :
+À partir de ce pitch, crée un micro-drame BD COMPLET. Tu décides de TOUT :
 - Le titre accrocheur
 - La ville / le contexte (ville fictive africaine)
 - Les personnages (3 à 6, avec noms africains, descriptions physiques détaillées, personnalités)
