@@ -6,28 +6,26 @@ const Generator = {
   FIXED_STYLE: 'realistic comic book style, dramatic lighting, cinematic composition, warm African color palette, detailed linework, strong shadows',
 
   async generateDrama(params, apiKey, onProgress) {
-    const { title, description, setting, episodes, panelsPerEpisode, themes, characters } = params;
+    const { idea, themes } = params;
 
-    onProgress('Claude analyse votre histoire...', 5);
+    onProgress('Claude analyse votre idée...', 5);
     await this._wait(800);
 
-    const characterBlock = characters.map((c, i) =>
-      `Personnage ${i + 1} : ${c.name} — ${c.description}`
-    ).join('\n');
+    const themeBlock = themes.length > 0 ? `\nThèmes choisis par l'utilisateur : ${themes.join(', ')}` : '';
 
-    const themeBlock = themes.length > 0 ? `Thèmes principaux : ${themes.join(', ')}` : '';
+    const userMessage = `Voici l'idée de micro-drame de l'utilisateur :
 
-    const userMessage = `Crée un micro-drame BD complet avec ces paramètres :
-
-Titre : ${title}
-Description : ${description}
-Ville / Contexte : ${setting}
-Nombre d'épisodes : ${episodes}
-Nombre de cases par épisode : ${panelsPerEpisode}
+"${idea}"
 ${themeBlock}
 
-Personnages :
-${characterBlock}
+À partir de cette idée, crée un micro-drame BD COMPLET. Tu décides de TOUT :
+- Le titre accrocheur
+- La ville / le contexte (ville fictive africaine)
+- Les personnages (3 à 6, avec noms africains, descriptions physiques détaillées, personnalités)
+- Le nombre d'épisodes (minimum 5, adapté à la complexité de l'histoire)
+- Le nombre de cases par épisode (entre 10 et 25, adapté au rythme)
+- Le découpage complet avec dialogues, voix off, SFX
+- Des cliffhangers puissants à chaque fin d'épisode
 
 IMPORTANT pour chaque pixverse_prompt :
 1. Description physique exacte du/des personnage(s) présent(s) EN ANGLAIS

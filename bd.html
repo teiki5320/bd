@@ -19,9 +19,28 @@
       <p class="library-subtitle">Générateur de BD alimenté par Claude AI</p>
     </header>
 
-    <button class="btn-primary btn-new-project" onclick="showCreation()">
-      + Nouveau micro-drame
-    </button>
+    <div class="library-actions">
+      <button class="btn-primary btn-new-project" onclick="showCreation()">
+        + Nouveau micro-drame
+      </button>
+      <button class="btn-settings" onclick="toggleSettings()" title="Paramètres">&#9881;</button>
+    </div>
+
+    <!-- Panneau Paramètres -->
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="settings-inner">
+        <h3 class="settings-title">Paramètres</h3>
+        <div class="form-group">
+          <label class="form-label" for="settingsApiKey">Clé API Claude</label>
+          <div class="api-key-row">
+            <input type="password" id="settingsApiKey" class="form-input" placeholder="sk-ant-api03-...">
+            <button class="btn-toggle-key" onclick="toggleApiKeyVisibility()" title="Afficher/Masquer">&#128065;</button>
+          </div>
+          <span class="form-hint">Stockée localement dans votre navigateur. Nécessaire pour générer.</span>
+        </div>
+        <button class="btn-save-settings" onclick="saveSettings()">Enregistrer</button>
+      </div>
+    </div>
 
     <div id="projectList" class="project-grid">
       <!-- Filled by JS -->
@@ -42,79 +61,41 @@
     <h2 class="creation-title">Nouveau Micro-Drame</h2>
 
     <form id="creationForm" class="creation-form" onsubmit="return false;">
-      <!-- Titre -->
+      <!-- Idée -->
       <div class="form-group">
-        <label class="form-label" for="inputTitle">Titre du micro-drame</label>
-        <input type="text" id="inputTitle" class="form-input" placeholder="Ex: La Fille du Quartier" required>
-      </div>
-
-      <!-- Description -->
-      <div class="form-group">
-        <label class="form-label" for="inputDescription">Description de l'histoire</label>
-        <textarea id="inputDescription" class="form-textarea" rows="3" placeholder="Décrivez l'intrigue en 2-3 lignes..." required></textarea>
-      </div>
-
-      <!-- Ville / Contexte -->
-      <div class="form-group">
-        <label class="form-label" for="inputSetting">Ville / Contexte</label>
-        <input type="text" id="inputSetting" class="form-input" placeholder="Ex: Bakara, ville fictive africaine">
-      </div>
-
-      <!-- Épisodes & Cases -->
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="inputEpisodes">Nombre d'épisodes</label>
-          <select id="inputEpisodes" class="form-select">
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3" selected>3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="8">8</option>
-            <option value="9">9</option>
-            <option value="10">10</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="inputPanels">Cases par épisode</label>
-          <select id="inputPanels" class="form-select">
-            <option value="10">10</option>
-            <option value="12">12</option>
-            <option value="15" selected>15</option>
-            <option value="18">18</option>
-            <option value="20">20</option>
-            <option value="25">25</option>
-          </select>
-        </div>
+        <label class="form-label" for="inputIdea">Votre idée de micro-drame</label>
+        <textarea id="inputIdea" class="form-textarea form-textarea-lg" rows="4" placeholder="Décrivez votre idée en quelques lignes... Ex: Une jeune coiffeuse découvre que sa meilleure cliente est en réalité la maîtresse de son mari. Le quartier entier prend parti..." required></textarea>
+        <span class="form-hint">Claude inventera le titre, les personnages, le découpage et les dialogues</span>
       </div>
 
       <!-- Thèmes -->
       <div class="form-group">
-        <label class="form-label">Thèmes</label>
+        <label class="form-label">Thèmes <span class="form-hint">(choisissez un ou plusieurs)</span></label>
         <div class="theme-checkboxes">
           <label class="checkbox-label"><input type="checkbox" value="Romance interdite"> Romance interdite</label>
           <label class="checkbox-label"><input type="checkbox" value="Vengeance"> Vengeance</label>
+          <label class="checkbox-label"><input type="checkbox" value="Trahison"> Trahison</label>
           <label class="checkbox-label"><input type="checkbox" value="Ascension sociale"> Ascension sociale</label>
           <label class="checkbox-label"><input type="checkbox" value="Secrets de famille"> Secrets de famille</label>
+          <label class="checkbox-label"><input type="checkbox" value="Rivalité entre femmes"> Rivalité entre femmes</label>
+          <label class="checkbox-label"><input type="checkbox" value="Mariage forcé"> Mariage forcé</label>
+          <label class="checkbox-label"><input type="checkbox" value="Double vie"> Double vie</label>
+          <label class="checkbox-label"><input type="checkbox" value="Héritage contesté"> Héritage contesté</label>
+          <label class="checkbox-label"><input type="checkbox" value="Retour au village"> Retour au village</label>
+          <label class="checkbox-label"><input type="checkbox" value="Jalousie"> Jalousie</label>
+          <label class="checkbox-label"><input type="checkbox" value="Rédemption"> Rédemption</label>
+          <label class="checkbox-label"><input type="checkbox" value="Amour impossible"> Amour impossible</label>
+          <label class="checkbox-label"><input type="checkbox" value="Mensonge dévoilé"> Mensonge dévoilé</label>
+          <label class="checkbox-label"><input type="checkbox" value="Pouvoir et corruption"> Pouvoir et corruption</label>
+          <label class="checkbox-label"><input type="checkbox" value="Sorcellerie / Mystique"> Sorcellerie / Mystique</label>
+          <label class="checkbox-label"><input type="checkbox" value="Grossesse cachée"> Grossesse cachée</label>
+          <label class="checkbox-label"><input type="checkbox" value="Arnaque sentimentale"> Arnaque sentimentale</label>
         </div>
       </div>
 
-      <!-- Personnages -->
-      <div class="form-group">
-        <label class="form-label">Personnages <span class="form-hint">(jusqu'à 6)</span></label>
-        <div id="characterFields" class="character-fields">
-          <!-- Filled by JS -->
-        </div>
-        <button type="button" class="btn-add-char" id="btnAddChar" onclick="addCharacterField()">+ Ajouter un personnage</button>
-      </div>
-
-      <!-- Clé API -->
-      <div class="form-group">
-        <label class="form-label" for="inputApiKey">Clé API Claude</label>
-        <input type="password" id="inputApiKey" class="form-input" placeholder="sk-ant-..." required>
-        <span class="form-hint">Stockée localement dans votre navigateur</span>
+      <!-- Avertissement clé API -->
+      <div id="noApiKeyWarning" class="no-api-warning hidden">
+        &#9888; Aucune clé API configurée. <a href="#" onclick="showLibrary();setTimeout(toggleSettings,200);return false;">Allez dans Paramètres</a> pour l'ajouter.
       </div>
 
       <!-- Bouton Générer -->
