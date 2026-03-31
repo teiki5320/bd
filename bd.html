@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Micro-Drama BD Generator</title>
+  <title>Micro-Drama BD Generator — ChatGPT</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Crimson+Pro:ital@1&family=Special+Elite&display=swap" rel="stylesheet">
@@ -16,7 +16,7 @@
   <div class="library-wrapper">
     <header class="library-header">
       <h1 class="library-title">Micro-Drama BD</h1>
-      <p class="library-subtitle">Générateur de BD alimenté par Claude AI</p>
+      <p class="library-subtitle">Générateur de BD alimenté par ChatGPT</p>
     </header>
 
     <div class="library-actions">
@@ -31,12 +31,12 @@
       <div class="settings-inner">
         <h3 class="settings-title">Paramètres</h3>
         <div class="form-group">
-          <label class="form-label" for="settingsApiKey">Clé API Claude</label>
+          <label class="form-label" for="settingsApiKey">Clé API OpenAI</label>
           <div class="api-key-row">
-            <input type="password" id="settingsApiKey" class="form-input" placeholder="sk-ant-api03-...">
+            <input type="password" id="settingsApiKey" class="form-input" placeholder="sk-proj-...">
             <button class="btn-toggle-key" onclick="toggleApiKeyVisibility()" title="Afficher/Masquer">&#128065;</button>
           </div>
-          <span class="form-hint">Stockée localement dans votre navigateur. Nécessaire pour générer.</span>
+          <span class="form-hint">Stockée localement. Nécessaire pour générer. Modèle utilisé : GPT-4o</span>
         </div>
         <button class="btn-save-settings" onclick="saveSettings()">Enregistrer</button>
       </div>
@@ -71,10 +71,10 @@
 
         <!-- Avertissement clé API -->
         <div id="noApiKeyWarning" class="no-api-warning hidden">
-          &#9888; Aucune clé API configurée. <a href="#" onclick="showLibrary();setTimeout(toggleSettings,200);return false;">Allez dans Paramètres</a> pour l'ajouter.
+          &#9888; Aucune clé API OpenAI configurée. <a href="#" onclick="showLibrary();setTimeout(toggleSettings,200);return false;">Allez dans Paramètres</a> pour l'ajouter.
         </div>
 
-        <p class="step-desc">Claude invente un titre et un pitch de micro-drame africain</p>
+        <p class="step-desc">ChatGPT invente un titre et un pitch de micro-drame africain</p>
         <button type="button" class="btn-primary btn-idea" onclick="generateIdea()">
           &#9889; Générer une idée
         </button>

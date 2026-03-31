@@ -139,7 +139,7 @@ function resetCreationForm() {
 function generateIdea() {
   const apiKey = StorageManager.getApiKey();
   if (!apiKey) {
-    alert('Aucune clé API configurée. Allez dans Paramètres sur la page Bibliothèque.');
+    alert('Aucune clé API OpenAI configurée. Allez dans Paramètres sur la page Bibliothèque.');
     return;
   }
 
@@ -174,7 +174,7 @@ function startGeneration() {
 
   const apiKey = StorageManager.getApiKey();
   if (!apiKey) {
-    alert('Aucune clé API configurée. Allez dans Paramètres sur la page Bibliothèque.');
+    alert('Aucune clé API OpenAI configurée. Allez dans Paramètres sur la page Bibliothèque.');
     return;
   }
 
