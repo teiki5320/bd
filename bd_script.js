@@ -30,7 +30,30 @@ function showCreation() {
 
 // ===== INIT =====
 function initApp() {
+  // Load ComfyUI URL
+  document.getElementById('comfyuiUrl').value = ComfyUI.getUrl();
   renderLibrary();
+}
+
+// ===== COMFYUI SETTINGS =====
+function toggleSettings() {
+  document.getElementById('settingsPanel').classList.toggle('hidden');
+}
+
+async function saveComfySettings() {
+  const url = document.getElementById('comfyuiUrl').value.trim();
+  if (url) ComfyUI.setUrl(url);
+  const statusEl = document.getElementById('comfyStatus');
+  statusEl.textContent = 'Test...';
+  statusEl.className = 'comfy-status';
+  const ok = await ComfyUI.ping();
+  if (ok) {
+    statusEl.textContent = '✓ Connecté';
+    statusEl.className = 'comfy-status ok';
+  } else {
+    statusEl.textContent = '✗ Injoignable';
+    statusEl.className = 'comfy-status err';
+  }
 }
 
 // ===== LIBRARY =====
@@ -321,7 +344,7 @@ function renderBDTab() {
       panelEl.appendChild(sfxEl);
     }
 
-    // Upload overlay
+    // Upload overlay (only shows on hover when no gen happening)
     const uploadOverlay = document.createElement('div');
     uploadOverlay.className = 'bd-upload-overlay';
     uploadOverlay.innerHTML = '<span>&#128247;</span>';
@@ -330,6 +353,21 @@ function renderBDTab() {
       triggerPanelUpload(project.id, panelKey);
     };
     panelEl.appendChild(uploadOverlay);
+
+    // ComfyUI generate button
+    if (panel.pixverse_prompt) {
+      const genDiv = document.createElement('div');
+      genDiv.className = 'bd-panel-gen-overlay';
+      const genBtn = document.createElement('button');
+      genBtn.className = 'btn-gen-img';
+      genBtn.textContent = '🎨 Générer';
+      genBtn.onclick = function(e) {
+        e.stopPropagation();
+        generatePanelImage(project.id, panelKey, panel, panelEl);
+      };
+      genDiv.appendChild(genBtn);
+      panelEl.appendChild(genDiv);
+    }
 
     // Content
     const content = document.createElement('div');
@@ -377,6 +415,17 @@ function renderBDTab() {
     grid.appendChild(panelEl);
   });
 
+  // Generate All button
+  const genAllDiv = document.createElement('div');
+  genAllDiv.style.textAlign = 'center';
+  genAllDiv.style.marginTop = '12px';
+  const genAllBtn = document.createElement('button');
+  genAllBtn.className = 'btn-gen-all';
+  genAllBtn.textContent = '🎨 Générer toutes les images (épisode)';
+  genAllBtn.onclick = function() { generateAllPanelImages(project.id, app.currentEpisodeIndex); };
+  genAllDiv.appendChild(genAllBtn);
+  grid.after(genAllDiv);
+
   const cliffBanner = document.getElementById('cliffhangerBanner');
   if (episode.cliffhanger_text) {
     cliffBanner.textContent = episode.cliffhanger_text;
@@ -399,6 +448,131 @@ function changeEpisode(delta) {
   if (newIdx < 0 || newIdx >= project.data.episodes.length) return;
   app.currentEpisodeIndex = newIdx;
   renderBDTab();
+}
+
+// ===== COMFYUI IMAGE GENERATION =====
+async function generatePanelImage(projectId, panelKey, panel, panelEl) {
+  const project = StorageManager.getProject(projectId);
+  if (!project) return;
+
+  const ok = await ComfyUI.ping();
+  if (!ok) {
+    alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).');
+    return;
+  }
+
+  // Find reference face image for the first character present
+  let refImage = null;
+  if (panel.characters_present && panel.characters_present.length > 0) {
+    const charId = panel.characters_present[0];
+    const charPhotoKey = 'char-' + charId;
+    refImage = (project.images && project.images[charPhotoKey]) || null;
+  }
+
+  // Show status on panel
+  const btn = panelEl.querySelector('.btn-gen-img');
+  if (btn) { btn.disabled = true; btn.classList.add('generating'); btn.textContent = '⏳...'; }
+
+  let statusEl = panelEl.querySelector('.gen-status');
+  if (!statusEl) {
+    statusEl = document.createElement('div');
+    statusEl.className = 'gen-status';
+    panelEl.appendChild(statusEl);
+  }
+
+  try {
+    const base64 = await ComfyUI.generate(
+      panel.pixverse_prompt,
+      null,
+      refImage,
+      function(msg) { statusEl.textContent = msg; }
+    );
+
+    // Save image
+    StorageManager.saveImage(projectId, panelKey, base64);
+    statusEl.textContent = '✓ OK';
+    setTimeout(function() { renderBDTab(); }, 500);
+
+  } catch (err) {
+    statusEl.textContent = '✗ ' + err.message;
+    if (btn) { btn.disabled = false; btn.classList.remove('generating'); btn.textContent = '🎨 Générer'; }
+  }
+}
+
+async function generateAllPanelImages(projectId, episodeIndex) {
+  const project = StorageManager.getProject(projectId);
+  if (!project || !project.data) return;
+
+  const ok = await ComfyUI.ping();
+  if (!ok) {
+    alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).');
+    return;
+  }
+
+  const episode = project.data.episodes[episodeIndex];
+  if (!episode) return;
+
+  const panels = episode.panels || [];
+  const genAllBtn = document.querySelector('.btn-gen-all');
+  if (genAllBtn) { genAllBtn.disabled = true; genAllBtn.textContent = '⏳ Génération en cours...'; }
+
+  for (let i = 0; i < panels.length; i++) {
+    const panel = panels[i];
+    const panelKey = 'ep' + (episodeIndex + 1) + '-panel' + (i + 1);
+
+    // Skip if already has image
+    const existingImg = project.images && project.images[panelKey];
+    if (existingImg) continue;
+
+    if (!panel.pixverse_prompt) continue;
+
+    if (genAllBtn) genAllBtn.textContent = '⏳ Case ' + (i + 1) + '/' + panels.length + '...';
+
+    // Find ref face
+    let refImage = null;
+    if (panel.characters_present && panel.characters_present.length > 0) {
+      const charId = panel.characters_present[0];
+      refImage = (project.images && project.images['char-' + charId]) || null;
+    }
+
+    try {
+      const base64 = await ComfyUI.generate(panel.pixverse_prompt, null, refImage, null);
+      StorageManager.saveImage(projectId, panelKey, base64);
+    } catch (err) {
+      console.error('Erreur case ' + (i + 1) + ':', err);
+    }
+  }
+
+  if (genAllBtn) { genAllBtn.disabled = false; genAllBtn.textContent = '🎨 Générer toutes les images (épisode)'; }
+  renderBDTab();
+}
+
+// Generate character reference image
+async function generateCharImage(projectId, charId) {
+  const project = StorageManager.getProject(projectId);
+  if (!project || !project.data) return;
+
+  const ok = await ComfyUI.ping();
+  if (!ok) {
+    alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).');
+    return;
+  }
+
+  const char = project.data.characters.find(c => c.id === charId);
+  if (!char || !char.pixverse_prompt) return;
+
+  const btn = document.querySelector('[data-gen-char="' + charId + '"]');
+  if (btn) { btn.disabled = true; btn.classList.add('generating'); btn.textContent = '⏳...'; }
+
+  try {
+    const prompt = char.pixverse_prompt + ', portrait, face close-up, looking at camera';
+    const base64 = await ComfyUI.generate(prompt, null, null, null);
+    StorageManager.saveImage(projectId, 'char-' + charId, base64);
+    renderCharactersTab();
+  } catch (err) {
+    alert('Erreur: ' + err.message);
+    if (btn) { btn.disabled = false; btn.classList.remove('generating'); btn.textContent = '🎨 Générer'; }
+  }
 }
 
 // ===== PANEL OVERLAY =====
@@ -499,6 +673,10 @@ function renderCharactersTab() {
 
     card.innerHTML =
       '<div class="char-card-photo" onclick="triggerCharUpload(\'' + project.id + '\', \'' + char.id + '\')">' + photoHtml + '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+        '<button class="btn-gen-img" data-gen-char="' + char.id + '" onclick="event.stopPropagation();generateCharImage(\'' + project.id + '\',\'' + char.id + '\')">🎨 Générer</button>' +
+        '<button class="btn-gen-img" style="background:var(--border-light);color:var(--gold);" onclick="event.stopPropagation();triggerCharUpload(\'' + project.id + '\',\'' + char.id + '\')">📷 Upload</button>' +
+      '</div>' +
       '<div class="char-card-name">' + escapeHtml(char.name) + '</div>' +
       (roleAge ? '<div class="char-card-role">' + escapeHtml(roleAge) + '</div>' : '') +
       (char.personality ? '<div class="char-card-info"><strong>Personnalité :</strong> ' + escapeHtml(char.personality) + '</div>' : '') +

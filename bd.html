@@ -22,6 +22,23 @@
     <button class="btn-primary btn-new-project" onclick="showCreation()">
       + Nouveau micro-drame
     </button>
+    <button class="btn-settings" onclick="toggleSettings()" title="Paramètres ComfyUI">&#9881;</button>
+
+    <!-- Paramètres ComfyUI -->
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="settings-inner">
+        <h3 class="settings-title">ComfyUI</h3>
+        <div class="form-group">
+          <label class="form-label" for="comfyuiUrl">URL du serveur</label>
+          <input type="text" id="comfyuiUrl" class="form-input" placeholder="http://127.0.0.1:8188">
+          <span class="form-hint">Lancez ComfyUI avec : --listen 0.0.0.0 --enable-cors-header</span>
+        </div>
+        <div class="settings-actions">
+          <button class="btn-save-settings" onclick="saveComfySettings()">Enregistrer</button>
+          <span id="comfyStatus" class="comfy-status"></span>
+        </div>
+      </div>
+    </div>
 
     <div id="projectList" class="project-grid">
       <!-- Filled by JS -->
@@ -126,6 +143,7 @@
 <input type="file" id="imageUploadInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
 
 <script src="storage.js"></script>
+<script src="comfyui-service.js"></script>
 <script src="bd_script.js"></script>
 </body>
 </html>
