@@ -242,13 +242,17 @@ function renderViewer() {
   switchTab('bd');
 }
 
+var TAB_IDS = { bd: 'tabBD', characters: 'tabCharacters', prompts: 'tabPrompts' };
+
 function switchTab(tabName) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tabName);
   });
   document.querySelectorAll('.tab-content').forEach(tc => {
-    tc.classList.toggle('active', tc.id === 'tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
+    tc.classList.remove('active');
   });
+  var targetId = TAB_IDS[tabName];
+  if (targetId) document.getElementById(targetId).classList.add('active');
 
   if (tabName === 'bd') renderBDTab();
   else if (tabName === 'characters') renderCharactersTab();
