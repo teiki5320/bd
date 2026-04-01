@@ -4,8 +4,10 @@
 const app = {
   currentProjectId: null,
   currentEpisodeIndex: 0,
-  pendingUpload: null // { projectId, panelKey, type: 'panel'|'character', charId? }
+  pendingUpload: null
 };
+
+const FIXED_STYLE = 'realistic comic book style, dramatic lighting, cinematic composition, warm African color palette, detailed linework, strong shadows';
 
 // ===== SCREEN MANAGEMENT =====
 function showScreen(id) {
@@ -22,42 +24,13 @@ function showLibrary() {
 
 function showCreation() {
   showScreen('creation');
-  resetCreationForm();
+  document.getElementById('scriptInput').value = '';
+  document.getElementById('parseError').classList.add('hidden');
 }
 
 // ===== INIT =====
 function initApp() {
-  // Load saved API key into settings panel
-  const savedKey = StorageManager.getApiKey();
-  if (savedKey) {
-    document.getElementById('settingsApiKey').value = savedKey;
-  }
   renderLibrary();
-}
-
-// ===== SETTINGS =====
-function toggleSettings() {
-  const panel = document.getElementById('settingsPanel');
-  panel.classList.toggle('hidden');
-  if (!panel.classList.contains('hidden')) {
-    const savedKey = StorageManager.getApiKey();
-    document.getElementById('settingsApiKey').value = savedKey;
-  }
-}
-
-function toggleApiKeyVisibility() {
-  const input = document.getElementById('settingsApiKey');
-  input.type = input.type === 'password' ? 'text' : 'password';
-}
-
-function saveSettings() {
-  const key = document.getElementById('settingsApiKey').value.trim();
-  StorageManager.setApiKey(key);
-  const btn = document.querySelector('.btn-save-settings');
-  const orig = btn.textContent;
-  btn.textContent = '✓ Enregistré !';
-  btn.style.background = 'var(--green)';
-  setTimeout(function() { btn.textContent = orig; }, 1500);
 }
 
 // ===== LIBRARY =====
@@ -116,123 +89,73 @@ function openProject(id) {
   renderViewer();
 }
 
-// ===== CREATION FORM =====
-let currentIdea = null; // { title, summary }
+// ===== IMPORT SCRIPT =====
+function importScript() {
+  const raw = document.getElementById('scriptInput').value.trim();
+  const errEl = document.getElementById('parseError');
 
-function resetCreationForm() {
-  currentIdea = null;
-  document.getElementById('ideaResult').classList.add('hidden');
-  document.getElementById('stepThemes').classList.add('hidden');
-  document.querySelectorAll('.theme-checkboxes input').forEach(cb => { cb.checked = false; });
-
-  // Show warning if no API key
-  const apiKey = StorageManager.getApiKey();
-  const warning = document.getElementById('noApiKeyWarning');
-  if (!apiKey) {
-    warning.classList.remove('hidden');
-  } else {
-    warning.classList.add('hidden');
-  }
-}
-
-// ===== ÉTAPE 1 : GÉNÉRER UNE IDÉE =====
-function generateIdea() {
-  const apiKey = StorageManager.getApiKey();
-  if (!apiKey) {
-    alert('Aucune clé API OpenAI configurée. Allez dans Paramètres sur la page Bibliothèque.');
+  if (!raw) {
+    errEl.textContent = 'Collez un script JSON avant de continuer.';
+    errEl.classList.remove('hidden');
     return;
   }
 
-  const btn = document.querySelector('.btn-idea');
-  const origText = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '&#9881; Claude réfléchit...';
-
-  Generator.generateIdea(apiKey).then(function(data) {
-    currentIdea = data;
-    document.getElementById('ideaTitle').textContent = data.title;
-    document.getElementById('ideaSummary').textContent = data.summary;
-    document.getElementById('ideaResult').classList.remove('hidden');
-    document.getElementById('stepThemes').classList.remove('hidden');
-    btn.disabled = false;
-    btn.innerHTML = origText;
-  }).catch(function(err) {
-    alert('Erreur : ' + err.message);
-    btn.disabled = false;
-    btn.innerHTML = origText;
-  });
-}
-
-// ===== GENERATION =====
-let generationAborted = false;
-
-function startGeneration() {
-  if (!currentIdea) {
-    alert('Générez d\'abord une idée.');
+  let data;
+  try {
+    // Try to extract JSON from the text (in case there's extra text around it)
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Aucun JSON trouvé dans le texte collé.');
+    data = JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    errEl.textContent = 'JSON invalide : ' + e.message;
+    errEl.classList.remove('hidden');
     return;
   }
 
-  const apiKey = StorageManager.getApiKey();
-  if (!apiKey) {
-    alert('Aucune clé API OpenAI configurée. Allez dans Paramètres sur la page Bibliothèque.');
+  // Validate minimum structure
+  if (!data.title) {
+    errEl.textContent = 'Le JSON doit contenir un champ "title".';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  if (!data.episodes || !Array.isArray(data.episodes) || data.episodes.length === 0) {
+    errEl.textContent = 'Le JSON doit contenir un tableau "episodes" avec au moins un épisode.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  if (!data.characters || !Array.isArray(data.characters)) {
+    errEl.textContent = 'Le JSON doit contenir un tableau "characters".';
+    errEl.classList.remove('hidden');
     return;
   }
 
-  // Themes
-  const themes = [];
-  document.querySelectorAll('.theme-checkboxes input:checked').forEach(cb => {
-    themes.push(cb.value);
-  });
+  errEl.classList.add('hidden');
 
-  // Switch to generation screen
-  showScreen('generating');
-  generationAborted = false;
-  document.getElementById('genError').classList.add('hidden');
-  document.getElementById('btnCancelGen').classList.remove('hidden');
-  document.getElementById('btnCancelGen').textContent = 'Annuler';
-  document.getElementById('genProgressFill').style.width = '0%';
-  document.getElementById('genMessage').textContent = 'Préparation...';
+  // Save as project
+  const project = {
+    id: StorageManager.generateId(),
+    title: data.title,
+    setting: data.setting || '',
+    description: '',
+    themes: [],
+    data: data,
+    images: {}
+  };
 
-  const params = { title: currentIdea.title, summary: currentIdea.summary, themes: themes };
+  StorageManager.saveProject(project);
 
-  Generator.generateDrama(params, apiKey, function(message, percent) {
-    if (generationAborted) return;
-    document.getElementById('genMessage').textContent = message;
-    document.getElementById('genProgressFill').style.width = percent + '%';
-  }).then(function(data) {
-    if (generationAborted) return;
-
-    const project = {
-      id: StorageManager.generateId(),
-      title: data.title || currentIdea.title,
-      setting: data.setting || '',
-      description: currentIdea.summary,
-      themes: themes,
-      data: data,
-      images: {}
-    };
-
-    StorageManager.saveProject(project);
-
-    // Open viewer
-    app.currentProjectId = project.id;
-    app.currentEpisodeIndex = 0;
-    showScreen('viewer');
-    renderViewer();
-
-  }).catch(function(err) {
-    if (generationAborted) return;
-    document.getElementById('genError').textContent = err.message;
-    document.getElementById('genError').classList.remove('hidden');
-    document.getElementById('btnCancelGen').textContent = '← Retour';
-    document.getElementById('genMessage').textContent = 'Erreur';
-    document.getElementById('genProgressFill').style.width = '0%';
-  });
+  // Open viewer
+  app.currentProjectId = project.id;
+  app.currentEpisodeIndex = 0;
+  showScreen('viewer');
+  renderViewer();
 }
 
-function cancelGeneration() {
-  generationAborted = true;
-  showCreation();
+// ===== COPY HELP PROMPT =====
+function copyHelpPrompt() {
+  const text = document.getElementById('helpPrompt').textContent;
+  const btn = document.querySelector('.btn-copy-help');
+  copyToClipboard(btn, text);
 }
 
 // ===== VIEWER =====
@@ -241,10 +164,7 @@ function renderViewer() {
   if (!project || !project.data) { showLibrary(); return; }
 
   document.getElementById('viewerTitle').textContent = project.data.title || project.title;
-
-  // Reset to BD tab
   switchTab('bd');
-  renderBDTab();
 }
 
 function switchTab(tabName) {
@@ -255,7 +175,6 @@ function switchTab(tabName) {
     tc.classList.toggle('active', tc.id === 'tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
   });
 
-  // Map tab names to content IDs
   if (tabName === 'bd') renderBDTab();
   else if (tabName === 'characters') renderCharactersTab();
   else if (tabName === 'prompts') renderPromptsTab();
@@ -267,23 +186,18 @@ function renderBDTab() {
   if (!project || !project.data) return;
 
   const episodes = project.data.episodes;
-  const epIdx = app.currentEpisodeIndex;
-
   if (!episodes || episodes.length === 0) return;
 
-  // Clamp index
-  if (epIdx >= episodes.length) app.currentEpisodeIndex = episodes.length - 1;
+  if (app.currentEpisodeIndex >= episodes.length) app.currentEpisodeIndex = episodes.length - 1;
 
   const episode = episodes[app.currentEpisodeIndex];
 
-  // Nav
   document.getElementById('episodeIndicator').textContent =
     'Épisode ' + (app.currentEpisodeIndex + 1) + ' / ' + episodes.length;
   document.getElementById('btnPrevEp').disabled = (app.currentEpisodeIndex === 0);
   document.getElementById('btnNextEp').disabled = (app.currentEpisodeIndex === episodes.length - 1);
   document.getElementById('episodeTitle').textContent = episode.title || '';
 
-  // Grid
   const grid = document.getElementById('bdGrid');
   grid.innerHTML = '';
 
@@ -310,7 +224,7 @@ function renderBDTab() {
       panelEl.appendChild(img);
     }
 
-    // SFX (absolute positioned)
+    // SFX
     if (panel.sfx) {
       const sfxEl = document.createElement('div');
       sfxEl.className = 'bd-sfx';
@@ -328,11 +242,10 @@ function renderBDTab() {
     };
     panelEl.appendChild(uploadOverlay);
 
-    // Content container
+    // Content
     const content = document.createElement('div');
     content.className = 'bd-panel-content';
 
-    // Scene description (subtle, only when no image)
     if (!imgData && panel.scene_description) {
       const sceneEl = document.createElement('div');
       sceneEl.className = 'bd-scene-desc';
@@ -340,33 +253,22 @@ function renderBDTab() {
       content.appendChild(sceneEl);
     }
 
-    // Dialogue bubbles
     if (panel.dialogue) {
-      const charIds = Object.keys(panel.dialogue);
-      charIds.forEach(function(charId) {
+      Object.keys(panel.dialogue).forEach(function(charId) {
         const text = panel.dialogue[charId];
         if (!text) return;
-
         const character = project.data.characters.find(c => c.id === charId);
         const charName = character ? character.name : charId;
 
         const bubbleEl = document.createElement('div');
         bubbleEl.className = 'bd-bubble';
-
-        const nameEl = document.createElement('div');
-        nameEl.className = 'bd-bubble-name';
-        nameEl.textContent = charName;
-        bubbleEl.appendChild(nameEl);
-
-        const textEl = document.createElement('div');
-        textEl.textContent = text;
-        bubbleEl.appendChild(textEl);
-
+        bubbleEl.innerHTML =
+          '<div class="bd-bubble-name">' + escapeHtml(charName) + '</div>' +
+          '<div>' + escapeHtml(text) + '</div>';
         content.appendChild(bubbleEl);
       });
     }
 
-    // Voice over
     if (panel.voice_over) {
       const voEl = document.createElement('div');
       voEl.className = 'bd-voiceover';
@@ -374,7 +276,6 @@ function renderBDTab() {
       content.appendChild(voEl);
     }
 
-    // Caption
     if (panel.caption) {
       const capEl = document.createElement('div');
       capEl.className = 'bd-caption';
@@ -383,14 +284,10 @@ function renderBDTab() {
     }
 
     panelEl.appendChild(content);
-
-    // Click for overlay
     panelEl.onclick = function() { showPanelOverlay(panel, project, panelKey); };
-
     grid.appendChild(panelEl);
   });
 
-  // Cliffhanger
   const cliffBanner = document.getElementById('cliffhangerBanner');
   if (episode.cliffhanger_text) {
     cliffBanner.textContent = episode.cliffhanger_text;
@@ -403,9 +300,8 @@ function renderBDTab() {
 function changeEpisode(delta) {
   const project = StorageManager.getProject(app.currentProjectId);
   if (!project || !project.data) return;
-  const episodes = project.data.episodes;
   const newIdx = app.currentEpisodeIndex + delta;
-  if (newIdx < 0 || newIdx >= episodes.length) return;
+  if (newIdx < 0 || newIdx >= project.data.episodes.length) return;
   app.currentEpisodeIndex = newIdx;
   renderBDTab();
 }
@@ -420,80 +316,57 @@ function showPanelOverlay(panel, project, panelKey) {
   html += '<div class="overlay-label">Case ' + (panel.number || '') + ' — ' + (panel.layout || '') + '</div>';
   html += '</div>';
 
-  // Image
   const imgData = project.images && project.images[panelKey];
   if (imgData) {
     html += '<div class="overlay-section"><img src="' + imgData + '" style="width:100%;border-radius:4px;margin-bottom:8px;" alt="case"></div>';
   }
 
-  // Scene description
   if (panel.scene_description) {
-    html += '<div class="overlay-section">';
-    html += '<div class="overlay-label">Description de la scène</div>';
-    html += '<div class="overlay-text">' + escapeHtml(panel.scene_description) + '</div>';
-    html += '</div>';
+    html += '<div class="overlay-section"><div class="overlay-label">Description de la scène</div>';
+    html += '<div class="overlay-text">' + escapeHtml(panel.scene_description) + '</div></div>';
   }
 
-  // Characters present
   if (panel.characters_present && panel.characters_present.length > 0) {
     const names = panel.characters_present.map(function(cid) {
       const c = project.data.characters.find(ch => ch.id === cid);
       return c ? c.name : cid;
     });
-    html += '<div class="overlay-section">';
-    html += '<div class="overlay-label">Personnages présents</div>';
-    html += '<div class="overlay-text">' + escapeHtml(names.join(', ')) + '</div>';
-    html += '</div>';
+    html += '<div class="overlay-section"><div class="overlay-label">Personnages</div>';
+    html += '<div class="overlay-text">' + escapeHtml(names.join(', ')) + '</div></div>';
   }
 
-  // Dialogue
   if (panel.dialogue) {
-    html += '<div class="overlay-section">';
-    html += '<div class="overlay-label">Dialogues</div>';
+    html += '<div class="overlay-section"><div class="overlay-label">Dialogues</div>';
     Object.keys(panel.dialogue).forEach(function(charId) {
       const text = panel.dialogue[charId];
       if (!text) return;
       const character = project.data.characters.find(c => c.id === charId);
       const charName = character ? character.name : charId;
-      html += '<div style="margin-bottom:6px;">';
-      html += '<strong style="color:var(--red);font-family:Bangers;letter-spacing:1px;">' + escapeHtml(charName) + '</strong>';
-      html += '<div class="overlay-dialogue">' + escapeHtml(text) + '</div>';
-      html += '</div>';
+      html += '<div style="margin-bottom:6px;"><strong style="color:var(--red);font-family:Bangers;letter-spacing:1px;">' + escapeHtml(charName) + '</strong>';
+      html += '<div class="overlay-dialogue">' + escapeHtml(text) + '</div></div>';
     });
     html += '</div>';
   }
 
-  // Voice over
   if (panel.voice_over) {
-    html += '<div class="overlay-section">';
-    html += '<div class="overlay-label">Voix off</div>';
-    html += '<div class="overlay-voiceover">' + escapeHtml(panel.voice_over) + '</div>';
-    html += '</div>';
+    html += '<div class="overlay-section"><div class="overlay-label">Voix off</div>';
+    html += '<div class="overlay-voiceover">' + escapeHtml(panel.voice_over) + '</div></div>';
   }
 
-  // SFX
   if (panel.sfx) {
-    html += '<div class="overlay-section">';
-    html += '<div class="overlay-label">SFX</div>';
-    html += '<div class="overlay-sfx">' + escapeHtml(panel.sfx) + '</div>';
-    html += '</div>';
+    html += '<div class="overlay-section"><div class="overlay-label">SFX</div>';
+    html += '<div class="overlay-sfx">' + escapeHtml(panel.sfx) + '</div></div>';
   }
 
-  // Caption
   if (panel.caption) {
-    html += '<div class="overlay-section">';
-    html += '<div class="overlay-label">Caption</div>';
-    html += '<div class="overlay-text" style="font-style:italic;color:var(--gold);">' + escapeHtml(panel.caption) + '</div>';
-    html += '</div>';
+    html += '<div class="overlay-section"><div class="overlay-label">Caption</div>';
+    html += '<div class="overlay-text" style="font-style:italic;color:var(--gold);">' + escapeHtml(panel.caption) + '</div></div>';
   }
 
-  // Pixverse prompt
   if (panel.pixverse_prompt) {
-    html += '<div class="overlay-section">';
-    html += '<div class="overlay-label">Prompt Pixverse</div>';
+    html += '<div class="overlay-section"><div class="overlay-label">Prompt Pixverse</div>';
     html += '<div class="prompt-box">' + escapeHtml(panel.pixverse_prompt) + '</div>';
-    html += '<button class="btn-copy" style="margin-top:6px;" onclick="copyToClipboard(this, ' + "'" + escapeAttr(panel.pixverse_prompt) + "'" + ')">Copier</button>';
-    html += '</div>';
+    html += '<button class="btn-copy" style="margin-top:6px;" onclick="copyToClipboard(this, ' + "'" + escapeAttr(panel.pixverse_prompt) + "'" + ')">Copier</button></div>';
   }
 
   body.innerHTML = html;
@@ -501,10 +374,6 @@ function showPanelOverlay(panel, project, panelKey) {
 }
 
 function closePanelOverlay(e) {
-  if (!e) {
-    document.getElementById('panelOverlay').classList.add('hidden');
-    return;
-  }
   document.getElementById('panelOverlay').classList.add('hidden');
 }
 
@@ -557,15 +426,32 @@ function updateCharDescription(textarea) {
   if (!char) return;
 
   char.physical_description = newDesc;
-
-  // Rebuild all prompts
-  Generator.rebuildPrompts(project);
-
+  // Rebuild prompts
+  rebuildPrompts(project);
   StorageManager.saveProject(project);
-
-  // Re-render tabs
   renderCharactersTab();
   renderPromptsTab();
+}
+
+function rebuildPrompts(project) {
+  const data = project.data;
+  if (!data || !data.characters || !data.episodes) return;
+
+  data.characters.forEach(char => {
+    char.pixverse_prompt = char.physical_description + ', ' + FIXED_STYLE;
+  });
+
+  data.episodes.forEach(ep => {
+    ep.panels.forEach(panel => {
+      const charsPresent = (panel.characters_present || [])
+        .map(cid => data.characters.find(c => c.id === cid))
+        .filter(Boolean);
+      const charDescs = charsPresent.map(c => c.physical_description).join('. ');
+      const bgPrompt = data.background_prompt || data.setting || '';
+      const action = panel.scene_description || '';
+      panel.pixverse_prompt = charDescs + '. ' + bgPrompt + '. ' + action + '. ' + FIXED_STYLE;
+    });
+  });
 }
 
 // ===== PROMPTS TAB =====
@@ -576,33 +462,26 @@ function renderPromptsTab() {
   const container = document.getElementById('promptsList');
   container.innerHTML = '';
 
-  // Background prompt
   if (project.data.background_prompt) {
     const item = document.createElement('div');
     item.className = 'prompt-item';
     item.innerHTML =
-      '<div class="prompt-item-header">' +
-        '<span class="prompt-item-label">Arrière-plan de référence</span>' +
-        '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(project.data.background_prompt) + "'" + ')">Copier</button>' +
-      '</div>' +
+      '<div class="prompt-item-header"><span class="prompt-item-label">Arrière-plan de référence</span>' +
+      '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(project.data.background_prompt) + "'" + ')">Copier</button></div>' +
       '<div class="prompt-item-text">' + escapeHtml(project.data.background_prompt) + '</div>';
     container.appendChild(item);
   }
 
-  // Character prompts
   project.data.characters.forEach(function(char) {
     const item = document.createElement('div');
     item.className = 'prompt-item';
     item.innerHTML =
-      '<div class="prompt-item-header">' +
-        '<span class="prompt-item-label">&#128100; ' + escapeHtml(char.name) + '</span>' +
-        '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(char.pixverse_prompt || '') + "'" + ')">Copier</button>' +
-      '</div>' +
+      '<div class="prompt-item-header"><span class="prompt-item-label">&#128100; ' + escapeHtml(char.name) + '</span>' +
+      '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(char.pixverse_prompt || '') + "'" + ')">Copier</button></div>' +
       '<div class="prompt-item-text">' + escapeHtml(char.pixverse_prompt || '') + '</div>';
     container.appendChild(item);
   });
 
-  // Panel prompts
   let globalPanelNum = 0;
   project.data.episodes.forEach(function(ep) {
     ep.panels.forEach(function(panel) {
@@ -610,10 +489,8 @@ function renderPromptsTab() {
       const item = document.createElement('div');
       item.className = 'prompt-item';
       item.innerHTML =
-        '<div class="prompt-item-header">' +
-          '<span class="prompt-item-label">Case ' + globalPanelNum + ' — Ép.' + ep.number + '</span>' +
-          '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(panel.pixverse_prompt || '') + "'" + ')">Copier</button>' +
-        '</div>' +
+        '<div class="prompt-item-header"><span class="prompt-item-label">Case ' + globalPanelNum + ' — Ép.' + ep.number + '</span>' +
+        '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(panel.pixverse_prompt || '') + "'" + ')">Copier</button></div>' +
         '<div class="prompt-item-text">' + escapeHtml(panel.pixverse_prompt || '') + '</div>';
       container.appendChild(item);
     });
@@ -627,7 +504,7 @@ function triggerPanelUpload(projectId, panelKey) {
 }
 
 function triggerCharUpload(projectId, charId) {
-  app.pendingUpload = { projectId: projectId, panelKey: 'char-' + charId, type: 'character', charId: charId };
+  app.pendingUpload = { projectId: projectId, panelKey: 'char-' + charId, type: 'character' };
   document.getElementById('imageUploadInput').click();
 }
 
@@ -637,21 +514,12 @@ function handleImageUpload(event) {
 
   const reader = new FileReader();
   reader.onload = function(e) {
-    const base64 = e.target.result;
-    StorageManager.saveImage(app.pendingUpload.projectId, app.pendingUpload.panelKey, base64);
-
-    // Re-render appropriate tab
-    if (app.pendingUpload.type === 'panel') {
-      renderBDTab();
-    } else {
-      renderCharactersTab();
-    }
-
+    StorageManager.saveImage(app.pendingUpload.projectId, app.pendingUpload.panelKey, e.target.result);
+    if (app.pendingUpload.type === 'panel') renderBDTab();
+    else renderCharactersTab();
     app.pendingUpload = null;
   };
   reader.readAsDataURL(file);
-
-  // Reset input
   event.target.value = '';
 }
 
@@ -661,12 +529,8 @@ function copyToClipboard(btnEl, text) {
     const orig = btnEl.textContent;
     btnEl.textContent = '✓ Copié !';
     btnEl.classList.add('copied');
-    setTimeout(function() {
-      btnEl.textContent = orig;
-      btnEl.classList.remove('copied');
-    }, 1500);
+    setTimeout(function() { btnEl.textContent = orig; btnEl.classList.remove('copied'); }, 1500);
   }).catch(function() {
-    // Fallback
     const ta = document.createElement('textarea');
     ta.value = text;
     document.body.appendChild(ta);
@@ -676,10 +540,7 @@ function copyToClipboard(btnEl, text) {
     const orig = btnEl.textContent;
     btnEl.textContent = '✓ Copié !';
     btnEl.classList.add('copied');
-    setTimeout(function() {
-      btnEl.textContent = orig;
-      btnEl.classList.remove('copied');
-    }, 1500);
+    setTimeout(function() { btnEl.textContent = orig; btnEl.classList.remove('copied'); }, 1500);
   });
 }
 
