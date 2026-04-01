@@ -102,7 +102,6 @@ function importScript() {
 
   let data;
   try {
-    // Try to extract JSON from the text (in case there's extra text around it)
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Aucun JSON trouvé dans le texte collé.');
     data = JSON.parse(jsonMatch[0]);
@@ -112,7 +111,6 @@ function importScript() {
     return;
   }
 
-  // Validate minimum structure
   if (!data.title) {
     errEl.textContent = 'Le JSON doit contenir un champ "title".';
     errEl.classList.remove('hidden');
@@ -129,9 +127,11 @@ function importScript() {
     return;
   }
 
+  // Normalize data to handle variations in JSON structure from Claude
+  normalizeData(data);
+
   errEl.classList.add('hidden');
 
-  // Save as project
   const project = {
     id: StorageManager.generateId(),
     title: data.title,
@@ -144,11 +144,79 @@ function importScript() {
 
   StorageManager.saveProject(project);
 
-  // Open viewer
   app.currentProjectId = project.id;
   app.currentEpisodeIndex = 0;
   showScreen('viewer');
   renderViewer();
+}
+
+// ===== NORMALIZE DATA =====
+function normalizeData(data) {
+  // Ensure characters have all expected fields
+  data.characters.forEach(function(char, i) {
+    char.id = char.id || char.slug || ('char_' + i);
+    char.name = char.name || 'Personnage ' + (i + 1);
+    char.role = char.role || '';
+    char.age = char.age || null;
+    char.physical_description = char.physical_description || char.description || char.physique || '';
+    char.personality = char.personality || char.personnalite || char.personnality || '';
+    char.pixverse_prompt = char.pixverse_prompt || char.prompt || '';
+    // Auto-generate pixverse_prompt if missing but has physical_description
+    if (!char.pixverse_prompt && char.physical_description) {
+      char.pixverse_prompt = char.physical_description + ', ' + FIXED_STYLE;
+    }
+  });
+
+  // Ensure episodes have number field and panels are normalized
+  data.episodes.forEach(function(ep, epIdx) {
+    ep.number = ep.number || (epIdx + 1);
+    ep.title = ep.title || 'Épisode ' + ep.number;
+    ep.cliffhanger_text = ep.cliffhanger_text || ep.cliffhanger || '';
+    if (!ep.panels) ep.panels = [];
+
+    ep.panels.forEach(function(panel, pIdx) {
+      panel.number = panel.number || (pIdx + 1);
+      panel.layout = panel.layout || 'medium';
+      panel.scene_description = panel.scene_description || panel.description || panel.scene || '';
+      panel.characters_present = panel.characters_present || panel.characters || [];
+      panel.voice_over = panel.voice_over || panel.voiceover || panel.narration || null;
+      panel.sfx = panel.sfx || panel.sound || null;
+      panel.caption = panel.caption || null;
+      panel.pixverse_prompt = panel.pixverse_prompt || panel.prompt || panel.image_prompt || '';
+      panel.cliffhanger = panel.cliffhanger || false;
+
+      // Normalize dialogue - could be object, array of objects, or string
+      if (!panel.dialogue) {
+        panel.dialogue = null;
+      } else if (typeof panel.dialogue === 'string') {
+        // Single string dialogue - try to assign to first character present
+        var charId = (panel.characters_present && panel.characters_present[0]) || 'narrator';
+        var obj = {};
+        obj[charId] = panel.dialogue;
+        panel.dialogue = obj;
+      } else if (Array.isArray(panel.dialogue)) {
+        // Array of {character: "id", text: "..."} or {speaker: "id", line: "..."}
+        var dialogObj = {};
+        panel.dialogue.forEach(function(d) {
+          var cid = d.character || d.character_id || d.speaker || d.id || 'unknown';
+          var txt = d.text || d.line || d.dialogue || '';
+          if (txt) dialogObj[cid] = txt;
+        });
+        panel.dialogue = Object.keys(dialogObj).length > 0 ? dialogObj : null;
+      }
+      // If it's already an object, leave it as-is
+
+      // Auto-generate pixverse_prompt if missing
+      if (!panel.pixverse_prompt && panel.scene_description) {
+        var charsPresent = (panel.characters_present || [])
+          .map(function(cid) { return data.characters.find(function(c) { return c.id === cid; }); })
+          .filter(Boolean);
+        var charDescs = charsPresent.map(function(c) { return c.physical_description; }).join('. ');
+        var bg = data.background_prompt || data.setting || '';
+        panel.pixverse_prompt = (charDescs ? charDescs + '. ' : '') + bg + '. ' + panel.scene_description + '. ' + FIXED_STYLE;
+      }
+    });
+  });
 }
 
 // ===== COPY HELP PROMPT =====
@@ -399,16 +467,19 @@ function renderCharactersTab() {
       photoHtml = '<div class="char-card-photo-placeholder">&#128247; Ajouter une photo</div>';
     }
 
+    var ageText = char.age ? (char.age + ' ans') : '';
+    var roleAge = [char.role, ageText].filter(Boolean).join(' — ');
+
     card.innerHTML =
       '<div class="char-card-photo" onclick="triggerCharUpload(\'' + project.id + '\', \'' + char.id + '\')">' + photoHtml + '</div>' +
       '<div class="char-card-name">' + escapeHtml(char.name) + '</div>' +
-      '<div class="char-card-role">' + escapeHtml(char.role || '') + ' — ' + (char.age || '?') + ' ans</div>' +
-      '<div class="char-card-info"><strong>Personnalité :</strong> ' + escapeHtml(char.personality || '') + '</div>' +
+      (roleAge ? '<div class="char-card-role">' + escapeHtml(roleAge) + '</div>' : '') +
+      (char.personality ? '<div class="char-card-info"><strong>Personnalité :</strong> ' + escapeHtml(char.personality) + '</div>' : '') +
       '<div class="char-card-info"><strong>Description physique :</strong></div>' +
       '<textarea class="char-desc-edit" data-char-id="' + char.id + '" data-project-id="' + project.id + '" onchange="updateCharDescription(this)">' + escapeHtml(char.physical_description || '') + '</textarea>' +
-      '<div class="char-card-info"><strong>Prompt Pixverse :</strong></div>' +
-      '<div class="prompt-box">' + escapeHtml(char.pixverse_prompt || '') + '</div>' +
-      '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(char.pixverse_prompt || '') + "'" + ')">Copier le prompt</button>';
+      (char.pixverse_prompt ? '<div class="char-card-info"><strong>Prompt Pixverse :</strong></div>' +
+      '<div class="prompt-box">' + escapeHtml(char.pixverse_prompt) + '</div>' +
+      '<button class="btn-copy" onclick="copyToClipboard(this, ' + "'" + escapeAttr(char.pixverse_prompt) + "'" + ')">Copier le prompt</button>' : '');
 
     container.appendChild(card);
   });
