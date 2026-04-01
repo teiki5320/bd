@@ -172,7 +172,10 @@ function normalizeData(data) {
     ep.number = ep.number || (epIdx + 1);
     ep.title = ep.title || 'Épisode ' + ep.number;
     ep.cliffhanger_text = ep.cliffhanger_text || ep.cliffhanger || '';
-    if (!ep.panels) ep.panels = [];
+    // Accept various names for panels array
+    if (!ep.panels) {
+      ep.panels = ep.scenes || ep.cases || ep.pages || [];
+    }
 
     ep.panels.forEach(function(panel, pIdx) {
       panel.number = panel.number || (pIdx + 1);
@@ -231,6 +234,10 @@ function renderViewer() {
   const project = StorageManager.getProject(app.currentProjectId);
   if (!project || !project.data) { showLibrary(); return; }
 
+  // Re-normalize in case project was saved before normalization was added
+  normalizeData(project.data);
+  StorageManager.saveProject(project);
+
   document.getElementById('viewerTitle').textContent = project.data.title || project.title;
   switchTab('bd');
 }
@@ -250,11 +257,15 @@ function switchTab(tabName) {
 
 // ===== BD TAB =====
 function renderBDTab() {
+  try {
   const project = StorageManager.getProject(app.currentProjectId);
   if (!project || !project.data) return;
 
   const episodes = project.data.episodes;
-  if (!episodes || episodes.length === 0) return;
+  if (!episodes || episodes.length === 0) {
+    document.getElementById('bdGrid').innerHTML = '<div style="color:var(--gold);padding:20px;text-align:center;">Aucun épisode trouvé dans le projet.</div>';
+    return;
+  }
 
   if (app.currentEpisodeIndex >= episodes.length) app.currentEpisodeIndex = episodes.length - 1;
 
@@ -269,7 +280,13 @@ function renderBDTab() {
   const grid = document.getElementById('bdGrid');
   grid.innerHTML = '';
 
-  episode.panels.forEach(function(panel, pIdx) {
+  const panels = episode.panels || [];
+  if (panels.length === 0) {
+    grid.innerHTML = '<div style="color:var(--gold);padding:20px;text-align:center;">Aucune case dans cet épisode.</div>';
+    return;
+  }
+
+  panels.forEach(function(panel, pIdx) {
     const panelEl = document.createElement('div');
     panelEl.className = 'bd-panel';
     panelEl.dataset.layout = panel.layout || 'medium';
@@ -362,6 +379,12 @@ function renderBDTab() {
     cliffBanner.classList.remove('hidden');
   } else {
     cliffBanner.classList.add('hidden');
+  }
+
+  } catch (err) {
+    console.error('Erreur renderBDTab:', err);
+    document.getElementById('bdGrid').innerHTML =
+      '<div style="color:#ff8a6a;padding:20px;text-align:center;">Erreur d\'affichage : ' + escapeHtml(err.message) + '<br><br>Ouvrez la console (F12) pour plus de détails.</div>';
   }
 }
 
