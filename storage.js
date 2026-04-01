@@ -3,7 +3,6 @@
 // ===== STORAGE MANAGER =====
 const StorageManager = {
   PROJECTS_KEY: 'bd_projects',
-  API_KEY_KEY: 'bd_api_key',
 
   generateId() {
     return 'proj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -45,18 +44,6 @@ const StorageManager = {
   deleteProject(id) {
     const projects = this.getAllProjects().filter(p => p.id !== id);
     localStorage.setItem(this.PROJECTS_KEY, JSON.stringify(projects));
-  },
-
-  getApiKey() {
-    return localStorage.getItem(this.API_KEY_KEY) || '';
-  },
-
-  setApiKey(key) {
-    if (key) {
-      localStorage.setItem(this.API_KEY_KEY, key);
-    } else {
-      localStorage.removeItem(this.API_KEY_KEY);
-    }
   },
 
   saveImage(projectId, panelKey, base64Data) {

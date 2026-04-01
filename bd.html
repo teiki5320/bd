@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Micro-Drama BD Generator — ChatGPT</title>
+  <title>Micro-Drama BD</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Crimson+Pro:ital@1&family=Special+Elite&display=swap" rel="stylesheet">
@@ -16,31 +16,12 @@
   <div class="library-wrapper">
     <header class="library-header">
       <h1 class="library-title">Micro-Drama BD</h1>
-      <p class="library-subtitle">Générateur de BD alimenté par ChatGPT</p>
+      <p class="library-subtitle">Collez un script, obtenez une BD</p>
     </header>
 
-    <div class="library-actions">
-      <button class="btn-primary btn-new-project" onclick="showCreation()">
-        + Nouveau micro-drame
-      </button>
-      <button class="btn-settings" onclick="toggleSettings()" title="Paramètres">&#9881;</button>
-    </div>
-
-    <!-- Panneau Paramètres -->
-    <div id="settingsPanel" class="settings-panel hidden">
-      <div class="settings-inner">
-        <h3 class="settings-title">Paramètres</h3>
-        <div class="form-group">
-          <label class="form-label" for="settingsApiKey">Clé API OpenAI</label>
-          <div class="api-key-row">
-            <input type="password" id="settingsApiKey" class="form-input" placeholder="sk-proj-...">
-            <button class="btn-toggle-key" onclick="toggleApiKeyVisibility()" title="Afficher/Masquer">&#128065;</button>
-          </div>
-          <span class="form-hint">Stockée localement. Nécessaire pour générer. Modèle utilisé : GPT-4o</span>
-        </div>
-        <button class="btn-save-settings" onclick="saveSettings()">Enregistrer</button>
-      </div>
-    </div>
+    <button class="btn-primary btn-new-project" onclick="showCreation()">
+      + Nouveau micro-drame
+    </button>
 
     <div id="projectList" class="project-grid">
       <!-- Filled by JS -->
@@ -49,102 +30,54 @@
     <div id="emptyLibrary" class="empty-library hidden">
       <div class="empty-icon">&#128218;</div>
       <p>Aucun projet pour l'instant.</p>
-      <p class="empty-hint">Créez votre premier micro-drame africain !</p>
+      <p class="empty-hint">Demandez un script à Claude, collez-le ici !</p>
     </div>
   </div>
 </div>
 
-<!-- ============ ÉCRAN 2 : CRÉATION / PARAMÈTRES ============ -->
+<!-- ============ ÉCRAN 2 : COLLER LE SCRIPT ============ -->
 <div id="creation" class="screen">
   <div class="creation-wrapper">
     <button class="btn-back" onclick="showLibrary()">&#8592; Bibliothèque</button>
     <h2 class="creation-title">Nouveau Micro-Drame</h2>
 
-    <form id="creationForm" class="creation-form" onsubmit="return false;">
-
-      <!-- ÉTAPE 1 : Générer une idée -->
-      <div id="stepIdea" class="creation-step">
-        <div class="step-header">
-          <span class="step-number">1</span>
-          <span class="step-label">Obtenir une idée</span>
-        </div>
-
-        <!-- Avertissement clé API -->
-        <div id="noApiKeyWarning" class="no-api-warning hidden">
-          &#9888; Aucune clé API OpenAI configurée. <a href="#" onclick="showLibrary();setTimeout(toggleSettings,200);return false;">Allez dans Paramètres</a> pour l'ajouter.
-        </div>
-
-        <p class="step-desc">ChatGPT invente un titre et un pitch de micro-drame africain</p>
-        <button type="button" class="btn-primary btn-idea" onclick="generateIdea()">
-          &#9889; Générer une idée
-        </button>
-
-        <!-- Résultat idée -->
-        <div id="ideaResult" class="idea-result hidden">
-          <div class="idea-title" id="ideaTitle"></div>
-          <div class="idea-summary" id="ideaSummary"></div>
-          <button type="button" class="btn-reroll" onclick="generateIdea()">&#8635; Autre idée</button>
-        </div>
-      </div>
-
-      <!-- ÉTAPE 2 : Choisir thèmes + Générer (visible après étape 1) -->
-      <div id="stepThemes" class="creation-step hidden">
-        <div class="step-header">
-          <span class="step-number">2</span>
-          <span class="step-label">Choisir les thèmes et générer</span>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Thèmes <span class="form-hint">(choisissez un ou plusieurs)</span></label>
-          <div class="theme-checkboxes">
-            <label class="checkbox-label"><input type="checkbox" value="Romance interdite"> Romance interdite</label>
-            <label class="checkbox-label"><input type="checkbox" value="Vengeance"> Vengeance</label>
-            <label class="checkbox-label"><input type="checkbox" value="Trahison"> Trahison</label>
-            <label class="checkbox-label"><input type="checkbox" value="Ascension sociale"> Ascension sociale</label>
-            <label class="checkbox-label"><input type="checkbox" value="Secrets de famille"> Secrets de famille</label>
-            <label class="checkbox-label"><input type="checkbox" value="Rivalité entre femmes"> Rivalité entre femmes</label>
-            <label class="checkbox-label"><input type="checkbox" value="Mariage forcé"> Mariage forcé</label>
-            <label class="checkbox-label"><input type="checkbox" value="Double vie"> Double vie</label>
-            <label class="checkbox-label"><input type="checkbox" value="Héritage contesté"> Héritage contesté</label>
-            <label class="checkbox-label"><input type="checkbox" value="Retour au village"> Retour au village</label>
-            <label class="checkbox-label"><input type="checkbox" value="Jalousie"> Jalousie</label>
-            <label class="checkbox-label"><input type="checkbox" value="Rédemption"> Rédemption</label>
-            <label class="checkbox-label"><input type="checkbox" value="Amour impossible"> Amour impossible</label>
-            <label class="checkbox-label"><input type="checkbox" value="Mensonge dévoilé"> Mensonge dévoilé</label>
-            <label class="checkbox-label"><input type="checkbox" value="Pouvoir et corruption"> Pouvoir et corruption</label>
-            <label class="checkbox-label"><input type="checkbox" value="Sorcellerie / Mystique"> Sorcellerie / Mystique</label>
-            <label class="checkbox-label"><input type="checkbox" value="Grossesse cachée"> Grossesse cachée</label>
-            <label class="checkbox-label"><input type="checkbox" value="Arnaque sentimentale"> Arnaque sentimentale</label>
-          </div>
-        </div>
-
-        <button type="button" class="btn-primary btn-generate" onclick="startGeneration()">
-          &#10022; Générer la BD complète
-        </button>
-      </div>
-
-    </form>
-  </div>
-</div>
-
-<!-- ============ ÉCRAN 3 : GÉNÉRATION EN COURS ============ -->
-<div id="generating" class="screen">
-  <div class="generating-wrapper">
-    <div class="generating-icon">&#9881;</div>
-    <h2 class="generating-title" id="genTitle">Génération en cours...</h2>
-    <p class="generating-message" id="genMessage">Préparation...</p>
-    <div class="progress-bar-wrapper">
-      <div class="progress-bar-gen">
-        <div class="progress-fill-gen" id="genProgressFill" style="width:0%"></div>
-      </div>
+    <div class="paste-instructions">
+      <div class="paste-step"><span class="step-number">1</span> Demandez à Claude de créer votre script micro-drame</div>
+      <div class="paste-step"><span class="step-number">2</span> Copiez le JSON qu'il vous donne</div>
+      <div class="paste-step"><span class="step-number">3</span> Collez-le ci-dessous</div>
     </div>
-    <p class="generating-hint">Cela peut prendre 30 à 60 secondes</p>
-    <button class="btn-back btn-cancel-gen hidden" id="btnCancelGen" onclick="cancelGeneration()">Annuler</button>
-    <div id="genError" class="gen-error hidden"></div>
+
+    <div class="form-group">
+      <label class="form-label" for="scriptInput">Script JSON</label>
+      <textarea id="scriptInput" class="form-textarea script-paste-area" rows="12" placeholder='Collez ici le JSON généré par Claude...
+
+{
+  "title": "...",
+  "setting": "...",
+  "characters": [...],
+  "episodes": [...]
+}'></textarea>
+    </div>
+
+    <div id="parseError" class="parse-error hidden"></div>
+
+    <button type="button" class="btn-primary btn-generate" onclick="importScript()">
+      &#10022; Transformer en BD
+    </button>
+
+    <!-- Aide : format attendu -->
+    <details class="help-format">
+      <summary class="help-toggle">Comment obtenir le script ?</summary>
+      <div class="help-content">
+        <p>Envoyez ce message à <strong>Claude</strong> (claude.ai) :</p>
+        <div class="help-prompt" id="helpPrompt">Crée un micro-drame BD africain sur le thème [votre idée]. Réponds UNIQUEMENT en JSON avec cette structure : { "title": "string", "setting": "description du lieu", "background_prompt": "prompt Pixverse arrière-plan en anglais", "characters": [{ "id": "slug", "name": "string", "role": "string", "age": number, "physical_description": "en anglais détaillé", "personality": "en français", "pixverse_prompt": "description physique + realistic comic book style, dramatic lighting, cinematic composition, warm African color palette, detailed linework, strong shadows" }], "episodes": [{ "number": 1, "title": "string", "panels": [{ "number": 1, "layout": "full|wide|medium|small", "scene_description": "en français", "characters_present": ["id"], "dialogue": {"id": "texte"}, "voice_over": "string ou null", "sfx": "string ou null", "caption": "string ou null", "cliffhanger": false, "pixverse_prompt": "personnage + arrière-plan + action + style fixe, EN ANGLAIS" }], "cliffhanger_text": "string" }] }. Minimum 5 épisodes, 10-25 cases par épisode.</div>
+        <button type="button" class="btn-copy-help" onclick="copyHelpPrompt()">Copier le prompt</button>
+      </div>
+    </details>
   </div>
 </div>
 
-<!-- ============ ÉCRAN 4 : VISIONNEUSE BD ============ -->
+<!-- ============ ÉCRAN 3 : VISIONNEUSE BD ============ -->
 <div id="viewer" class="screen">
   <header class="viewer-header">
     <button class="btn-back" onclick="showLibrary()">&#8592; Bibliothèque</button>
@@ -160,31 +93,24 @@
 
   <!-- Onglet BD -->
   <div id="tabBD" class="tab-content active">
-    <!-- Navigation épisodes -->
     <div class="episode-nav">
       <button class="btn-ep-nav" id="btnPrevEp" onclick="changeEpisode(-1)">&#9664; Précédent</button>
       <span class="episode-indicator" id="episodeIndicator">Épisode 1 / 1</span>
       <button class="btn-ep-nav" id="btnNextEp" onclick="changeEpisode(1)">Suivant &#9654;</button>
     </div>
     <h3 class="episode-title" id="episodeTitle"></h3>
-    <div id="bdGrid" class="bd-grid">
-      <!-- Filled by JS -->
-    </div>
+    <div id="bdGrid" class="bd-grid"></div>
     <div class="cliffhanger-banner hidden" id="cliffhangerBanner"></div>
   </div>
 
   <!-- Onglet Personnages -->
   <div id="tabCharacters" class="tab-content">
-    <div id="charactersList" class="characters-list">
-      <!-- Filled by JS -->
-    </div>
+    <div id="charactersList" class="characters-list"></div>
   </div>
 
   <!-- Onglet Prompts -->
   <div id="tabPrompts" class="tab-content">
-    <div id="promptsList" class="prompts-list">
-      <!-- Filled by JS -->
-    </div>
+    <div id="promptsList" class="prompts-list"></div>
   </div>
 </div>
 
@@ -200,7 +126,6 @@
 <input type="file" id="imageUploadInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
 
 <script src="storage.js"></script>
-<script src="generator.js"></script>
 <script src="bd_script.js"></script>
 </body>
 </html>
