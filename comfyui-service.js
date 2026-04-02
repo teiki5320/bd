@@ -30,7 +30,7 @@ const ComfyUI = {
         "class_type": "KSampler",
         "inputs": {
           "seed": Math.floor(Math.random() * 1e15),
-          "steps": 30,
+          "steps": 20,
           "cfg": 7,
           "sampler_name": "euler",
           "scheduler": "normal",
@@ -50,8 +50,8 @@ const ComfyUI = {
       "5": {
         "class_type": "EmptyLatentImage",
         "inputs": {
-          "width": 1024,
-          "height": 1024,
+          "width": 768,
+          "height": 768,
           "batch_size": 1
         }
       },
@@ -221,11 +221,11 @@ const ComfyUI = {
         if (timeout) clearTimeout(timeout);
       };
 
-      // Timeout after 120s
+      // Timeout after 10 min
       timeout = setTimeout(() => {
         cleanup();
-        reject(new Error('Timeout: la génération a pris trop de temps'));
-      }, 120000);
+        reject(new Error('Timeout: la génération a pris trop de temps (10 min)'));
+      }, 600000);
 
       try {
         const wsUrl = url.replace('http', 'ws') + '/ws?clientId=' + clientId;
@@ -275,7 +275,7 @@ const ComfyUI = {
   // Polling fallback if WebSocket fails
   async _pollForResult(promptId, onProgress) {
     const url = this.getUrl();
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 600; i++) {
       await new Promise(r => setTimeout(r, 1000));
       if (onProgress && i % 5 === 0) onProgress('Génération en cours...');
 
