@@ -451,25 +451,22 @@ function changeEpisode(delta) {
 }
 
 // ===== COMFYUI IMAGE GENERATION =====
+
+// Generate a single panel image
 async function generatePanelImage(projectId, panelKey, panel, panelEl) {
   const project = StorageManager.getProject(projectId);
   if (!project) return;
 
   const ok = await ComfyUI.ping();
-  if (!ok) {
-    alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).');
-    return;
-  }
+  if (!ok) { alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).'); return; }
 
-  // Find reference face image for the first character present
+  // Find reference face: use the first character's portrait
   let refImage = null;
   if (panel.characters_present && panel.characters_present.length > 0) {
     const charId = panel.characters_present[0];
-    const charPhotoKey = 'char-' + charId;
-    refImage = (project.images && project.images[charPhotoKey]) || null;
+    refImage = (project.images && project.images['char-' + charId]) || null;
   }
 
-  // Show status on panel
   const btn = panelEl.querySelector('.btn-gen-img');
   if (btn) { btn.disabled = true; btn.classList.add('generating'); btn.textContent = '⏳...'; }
 
@@ -481,82 +478,26 @@ async function generatePanelImage(projectId, panelKey, panel, panelEl) {
   }
 
   try {
-    const base64 = await ComfyUI.generate(
-      panel.pixverse_prompt,
-      null,
-      refImage,
+    const base64 = await ComfyUI.generatePanel(
+      panel.pixverse_prompt, refImage,
       function(msg) { statusEl.textContent = msg; }
     );
-
-    // Save image
     StorageManager.saveImage(projectId, panelKey, base64);
     statusEl.textContent = '✓ OK';
     setTimeout(function() { renderBDTab(); }, 500);
-
   } catch (err) {
     statusEl.textContent = '✗ ' + err.message;
     if (btn) { btn.disabled = false; btn.classList.remove('generating'); btn.textContent = '🎨 Générer'; }
   }
 }
 
-async function generateAllPanelImages(projectId, episodeIndex) {
-  const project = StorageManager.getProject(projectId);
-  if (!project || !project.data) return;
-
-  const ok = await ComfyUI.ping();
-  if (!ok) {
-    alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).');
-    return;
-  }
-
-  const episode = project.data.episodes[episodeIndex];
-  if (!episode) return;
-
-  const panels = episode.panels || [];
-  const genAllBtn = document.querySelector('.btn-gen-all');
-  if (genAllBtn) { genAllBtn.disabled = true; genAllBtn.textContent = '⏳ Génération en cours...'; }
-
-  for (let i = 0; i < panels.length; i++) {
-    const panel = panels[i];
-    const panelKey = 'ep' + (episodeIndex + 1) + '-panel' + (i + 1);
-
-    // Skip if already has image
-    const existingImg = project.images && project.images[panelKey];
-    if (existingImg) continue;
-
-    if (!panel.pixverse_prompt) continue;
-
-    if (genAllBtn) genAllBtn.textContent = '⏳ Case ' + (i + 1) + '/' + panels.length + '...';
-
-    // Find ref face
-    let refImage = null;
-    if (panel.characters_present && panel.characters_present.length > 0) {
-      const charId = panel.characters_present[0];
-      refImage = (project.images && project.images['char-' + charId]) || null;
-    }
-
-    try {
-      const base64 = await ComfyUI.generate(panel.pixverse_prompt, null, refImage, null);
-      StorageManager.saveImage(projectId, panelKey, base64);
-    } catch (err) {
-      console.error('Erreur case ' + (i + 1) + ':', err);
-    }
-  }
-
-  if (genAllBtn) { genAllBtn.disabled = false; genAllBtn.textContent = '🎨 Générer toutes les images (épisode)'; }
-  renderBDTab();
-}
-
-// Generate character reference image
+// Generate a character portrait (no InstantID, just the prompt)
 async function generateCharImage(projectId, charId) {
   const project = StorageManager.getProject(projectId);
   if (!project || !project.data) return;
 
   const ok = await ComfyUI.ping();
-  if (!ok) {
-    alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).');
-    return;
-  }
+  if (!ok) { alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).'); return; }
 
   const char = project.data.characters.find(c => c.id === charId);
   if (!char || !char.pixverse_prompt) return;
@@ -565,14 +506,89 @@ async function generateCharImage(projectId, charId) {
   if (btn) { btn.disabled = true; btn.classList.add('generating'); btn.textContent = '⏳...'; }
 
   try {
-    const prompt = char.pixverse_prompt + ', portrait, face close-up, looking at camera';
-    const base64 = await ComfyUI.generate(prompt, null, null, null);
+    const prompt = char.pixverse_prompt + ', portrait, face close-up, front view, looking at camera, neutral background';
+    const base64 = await ComfyUI.generatePortrait(prompt, null);
     StorageManager.saveImage(projectId, 'char-' + charId, base64);
     renderCharactersTab();
   } catch (err) {
     alert('Erreur: ' + err.message);
     if (btn) { btn.disabled = false; btn.classList.remove('generating'); btn.textContent = '🎨 Générer'; }
   }
+}
+
+// Generate ALL: portraits first, then all panels of an episode
+async function generateAllPanelImages(projectId, episodeIndex) {
+  const project = StorageManager.getProject(projectId);
+  if (!project || !project.data) return;
+
+  const ok = await ComfyUI.ping();
+  if (!ok) { alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).'); return; }
+
+  const genAllBtn = document.querySelector('.btn-gen-all');
+  if (genAllBtn) { genAllBtn.disabled = true; }
+
+  // ÉTAPE 1: Générer les portraits manquants
+  const chars = project.data.characters || [];
+  for (let c = 0; c < chars.length; c++) {
+    const char = chars[c];
+    const charKey = 'char-' + char.id;
+    const hasPhoto = project.images && project.images[charKey];
+    if (hasPhoto || !char.pixverse_prompt) continue;
+
+    if (genAllBtn) genAllBtn.textContent = '⏳ Portrait ' + char.name + ' (' + (c + 1) + '/' + chars.length + ')...';
+
+    try {
+      const prompt = char.pixverse_prompt + ', portrait, face close-up, front view, looking at camera, neutral background';
+      const base64 = await ComfyUI.generatePortrait(prompt, function(msg) {
+        if (genAllBtn) genAllBtn.textContent = '⏳ ' + char.name + ': ' + msg;
+      });
+      StorageManager.saveImage(projectId, charKey, base64);
+    } catch (err) {
+      console.error('Erreur portrait ' + char.name + ':', err);
+    }
+  }
+
+  // Reload project after portraits
+  const updatedProject = StorageManager.getProject(projectId);
+
+  // ÉTAPE 2: Générer les cases de l'épisode
+  const episode = updatedProject.data.episodes[episodeIndex];
+  if (!episode) { if (genAllBtn) { genAllBtn.disabled = false; genAllBtn.textContent = '🎨 Générer toutes les images'; } return; }
+
+  const panels = episode.panels || [];
+  for (let i = 0; i < panels.length; i++) {
+    const panel = panels[i];
+    const panelKey = 'ep' + (episodeIndex + 1) + '-panel' + (i + 1);
+
+    // Skip if already has image
+    if (updatedProject.images && updatedProject.images[panelKey]) continue;
+    if (!panel.pixverse_prompt) continue;
+
+    if (genAllBtn) genAllBtn.textContent = '⏳ Case ' + (i + 1) + '/' + panels.length + '...';
+
+    // Find best face reference
+    let refImage = null;
+    if (panel.characters_present && panel.characters_present.length > 0) {
+      // Reload project each time to get latest images
+      const latestProject = StorageManager.getProject(projectId);
+      for (let ci = 0; ci < panel.characters_present.length; ci++) {
+        const ref = latestProject.images && latestProject.images['char-' + panel.characters_present[ci]];
+        if (ref) { refImage = ref; break; }
+      }
+    }
+
+    try {
+      const base64 = await ComfyUI.generatePanel(panel.pixverse_prompt, refImage, function(msg) {
+        if (genAllBtn) genAllBtn.textContent = '⏳ Case ' + (i + 1) + '/' + panels.length + ': ' + msg;
+      });
+      StorageManager.saveImage(projectId, panelKey, base64);
+    } catch (err) {
+      console.error('Erreur case ' + (i + 1) + ':', err);
+    }
+  }
+
+  if (genAllBtn) { genAllBtn.disabled = false; genAllBtn.textContent = '🎨 Générer toutes les images'; }
+  renderBDTab();
 }
 
 // ===== PANEL OVERLAY =====
