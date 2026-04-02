@@ -327,11 +327,11 @@ function renderBDTab() {
     panelEl.appendChild(numEl);
 
     // Image if uploaded
-    const imgData = project.images && project.images[panelKey];
-    if (imgData) {
+    const imgSrc = StorageManager.getImageSrc(project.id, panelKey);
+    if (imgSrc) {
       const img = document.createElement('img');
       img.className = 'bd-panel-img';
-      img.src = imgData;
+      img.src = imgSrc;
       img.alt = 'Case ' + (pIdx + 1);
       panelEl.appendChild(img);
     }
@@ -373,7 +373,7 @@ function renderBDTab() {
     const content = document.createElement('div');
     content.className = 'bd-panel-content';
 
-    if (!imgData && panel.scene_description) {
+    if (!imgSrc && panel.scene_description) {
       const sceneEl = document.createElement('div');
       sceneEl.className = 'bd-scene-desc';
       sceneEl.textContent = panel.scene_description;
@@ -464,7 +464,15 @@ async function generatePanelImage(projectId, panelKey, panel, panelEl) {
   let refImage = null;
   if (panel.characters_present && panel.characters_present.length > 0) {
     const charId = panel.characters_present[0];
-    refImage = (project.images && project.images['char-' + charId]) || null;
+    const charImg = project.images && project.images['char-' + charId];
+    // If it's a ComfyUI ref, pass the filename directly (already on server)
+    if (charImg && charImg.type === 'comfyui') {
+      refImage = charImg.filename;
+    } else if (charImg && charImg.type === 'upload') {
+      refImage = charImg.data; // base64
+    } else if (typeof charImg === 'string') {
+      refImage = charImg; // legacy base64
+    }
   }
 
   const btn = panelEl.querySelector('.btn-gen-img');
@@ -532,7 +540,8 @@ async function generateAllPanelImages(projectId, episodeIndex) {
   for (let c = 0; c < chars.length; c++) {
     const char = chars[c];
     const charKey = 'char-' + char.id;
-    const hasPhoto = project.images && project.images[charKey];
+    const hasPhoto = project.images && project.images[charKey] &&
+      (typeof project.images[charKey] === 'string' || project.images[charKey].type);
     if (hasPhoto || !char.pixverse_prompt) continue;
 
     if (genAllBtn) genAllBtn.textContent = '⏳ Portrait ' + char.name + ' (' + (c + 1) + '/' + chars.length + ')...';
@@ -569,11 +578,12 @@ async function generateAllPanelImages(projectId, episodeIndex) {
     // Find best face reference
     let refImage = null;
     if (panel.characters_present && panel.characters_present.length > 0) {
-      // Reload project each time to get latest images
       const latestProject = StorageManager.getProject(projectId);
       for (let ci = 0; ci < panel.characters_present.length; ci++) {
-        const ref = latestProject.images && latestProject.images['char-' + panel.characters_present[ci]];
-        if (ref) { refImage = ref; break; }
+        const charImg = latestProject.images && latestProject.images['char-' + panel.characters_present[ci]];
+        if (charImg && charImg.type === 'comfyui') { refImage = charImg.filename; break; }
+        else if (charImg && charImg.type === 'upload') { refImage = charImg.data; break; }
+        else if (typeof charImg === 'string' && charImg) { refImage = charImg; break; }
       }
     }
 
@@ -601,9 +611,9 @@ function showPanelOverlay(panel, project, panelKey) {
   html += '<div class="overlay-label">Case ' + (panel.number || '') + ' — ' + (panel.layout || '') + '</div>';
   html += '</div>';
 
-  const imgData = project.images && project.images[panelKey];
-  if (imgData) {
-    html += '<div class="overlay-section"><img src="' + imgData + '" style="width:100%;border-radius:4px;margin-bottom:8px;" alt="case"></div>';
+  const overlaySrc = StorageManager.getImageSrc(project.id, panelKey);
+  if (overlaySrc) {
+    html += '<div class="overlay-section"><img src="' + escapeAttr(overlaySrc) + '" style="width:100%;border-radius:4px;margin-bottom:8px;" alt="case"></div>';
   }
 
   if (panel.scene_description) {
@@ -675,7 +685,7 @@ function renderCharactersTab() {
     card.className = 'char-card';
 
     const charPhotoKey = 'char-' + char.id;
-    const photoData = project.images && project.images[charPhotoKey];
+    const photoData = StorageManager.getImageSrc(project.id, charPhotoKey);
 
     let photoHtml;
     if (photoData) {

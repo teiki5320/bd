@@ -178,18 +178,25 @@ const ComfyUI = {
   },
 
   // ===== GENERATE: Panel with InstantID face ref =====
-  async generatePanel(prompt, refImageBase64, onProgress) {
+  // refImage can be: a filename (already on ComfyUI server), base64 data, or null
+  async generatePanel(prompt, refImage, onProgress) {
     const neg = 'ugly, deformed, blurry, low quality, text, watermark, signature, bad anatomy, worst quality';
 
-    if (!refImageBase64) {
-      // No reference — generate without InstantID
+    if (!refImage) {
       if (onProgress) onProgress('Génération sans référence...');
       const workflow = this._buildPortraitWorkflow(prompt, neg);
       return this._queueAndWait(workflow, onProgress);
     }
 
-    if (onProgress) onProgress('Upload image de référence...');
-    const refFilename = await this.uploadImage(refImageBase64, 'ref_' + Date.now() + '.png');
+    let refFilename;
+    if (refImage.startsWith && refImage.startsWith('data:')) {
+      // It's base64 — upload first
+      if (onProgress) onProgress('Upload image de référence...');
+      refFilename = await this.uploadImage(refImage, 'ref_' + Date.now() + '.png');
+    } else {
+      // It's already a filename on the ComfyUI server
+      refFilename = refImage;
+    }
 
     if (onProgress) onProgress('Préparation InstantID...');
     const workflow = this._buildInstantIDWorkflow(prompt, neg, refFilename);
@@ -281,8 +288,33 @@ const ComfyUI = {
     throw new Error('Timeout');
   },
 
-  // Fetch the generated image as base64
+  // Fetch the generated image as a ComfyUI reference (not base64)
   async _fetchImage(promptId) {
+    const url = this.getUrl();
+    const r = await fetch(url + '/history/' + promptId);
+    if (!r.ok) throw new Error('Impossible de récupérer l\'historique');
+    const hist = await r.json();
+    const outputs = hist[promptId]?.outputs;
+
+    for (const nodeId of Object.keys(outputs || {})) {
+      const images = outputs[nodeId]?.images;
+      if (images && images.length > 0) {
+        const img = images[0];
+        // Return a reference object instead of downloading the whole image
+        return {
+          type: 'comfyui',
+          filename: img.filename,
+          subfolder: img.subfolder || '',
+          imgType: img.type || 'output',
+          comfyUrl: url
+        };
+      }
+    }
+    throw new Error('Aucune image dans la sortie ComfyUI');
+  },
+
+  // Fetch image as base64 (only used for InstantID reference upload)
+  async _fetchImageAsBase64(promptId) {
     const url = this.getUrl();
     const r = await fetch(url + '/history/' + promptId);
     if (!r.ok) throw new Error('Impossible de récupérer l\'historique');
