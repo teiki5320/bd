@@ -2,7 +2,7 @@
 
 // ===== COMFYUI SERVICE =====
 const ComfyUI = {
-  serverUrl: 'http://127.0.0.1:8188',
+  serverUrl: 'https://butter-volunteers-drive-excellence.trycloudflare.com',
 
   getUrl() {
     return localStorage.getItem('comfyui_url') || this.serverUrl;
