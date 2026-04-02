@@ -460,19 +460,13 @@ async function generatePanelImage(projectId, panelKey, panel, panelEl) {
   const ok = await ComfyUI.ping();
   if (!ok) { alert('ComfyUI n\'est pas accessible. Vérifiez dans les paramètres (engrenage).'); return; }
 
-  // Find reference face: use the first character's portrait
+  // Find reference face: use the first character's portrait filename on ComfyUI
+  // We need the ComfyUI filename for InstantID (not the compressed thumbnail)
   let refImage = null;
   if (panel.characters_present && panel.characters_present.length > 0) {
     const charId = panel.characters_present[0];
-    const charImg = project.images && project.images['char-' + charId];
-    // If it's a ComfyUI ref, pass the filename directly (already on server)
-    if (charImg && charImg.type === 'comfyui') {
-      refImage = charImg.filename;
-    } else if (charImg && charImg.type === 'upload') {
-      refImage = charImg.data; // base64
-    } else if (typeof charImg === 'string') {
-      refImage = charImg; // legacy base64
-    }
+    // Check if we have a stored ComfyUI filename for this character
+    refImage = StorageManager.getCharRefFilename(project.id, charId);
   }
 
   const btn = panelEl.querySelector('.btn-gen-img');
@@ -515,8 +509,13 @@ async function generateCharImage(projectId, charId) {
 
   try {
     const prompt = char.pixverse_prompt + ', portrait, face close-up, front view, looking at camera, neutral background';
-    const base64 = await ComfyUI.generatePortrait(prompt, null);
-    StorageManager.saveImage(projectId, 'char-' + charId, base64);
+    const result = await ComfyUI.generatePortrait(prompt, null);
+    // Save the ComfyUI filename for InstantID ref
+    if (result && result.type === 'comfyui') {
+      StorageManager.saveCharRefFilename(projectId, charId, result.filename);
+    }
+    // Save thumbnail for display
+    StorageManager.saveImage(projectId, 'char-' + charId, result);
     renderCharactersTab();
   } catch (err) {
     alert('Erreur: ' + err.message);
@@ -540,18 +539,20 @@ async function generateAllPanelImages(projectId, episodeIndex) {
   for (let c = 0; c < chars.length; c++) {
     const char = chars[c];
     const charKey = 'char-' + char.id;
-    const hasPhoto = project.images && project.images[charKey] &&
-      (typeof project.images[charKey] === 'string' || project.images[charKey].type);
+    const hasPhoto = project.images && project.images[charKey];
     if (hasPhoto || !char.pixverse_prompt) continue;
 
     if (genAllBtn) genAllBtn.textContent = '⏳ Portrait ' + char.name + ' (' + (c + 1) + '/' + chars.length + ')...';
 
     try {
       const prompt = char.pixverse_prompt + ', portrait, face close-up, front view, looking at camera, neutral background';
-      const base64 = await ComfyUI.generatePortrait(prompt, function(msg) {
+      const result = await ComfyUI.generatePortrait(prompt, function(msg) {
         if (genAllBtn) genAllBtn.textContent = '⏳ ' + char.name + ': ' + msg;
       });
-      StorageManager.saveImage(projectId, charKey, base64);
+      if (result && result.type === 'comfyui') {
+        StorageManager.saveCharRefFilename(projectId, char.id, result.filename);
+      }
+      StorageManager.saveImage(projectId, charKey, result);
     } catch (err) {
       console.error('Erreur portrait ' + char.name + ':', err);
     }
@@ -575,15 +576,12 @@ async function generateAllPanelImages(projectId, episodeIndex) {
 
     if (genAllBtn) genAllBtn.textContent = '⏳ Case ' + (i + 1) + '/' + panels.length + '...';
 
-    // Find best face reference
+    // Find best face reference (ComfyUI filename)
     let refImage = null;
     if (panel.characters_present && panel.characters_present.length > 0) {
-      const latestProject = StorageManager.getProject(projectId);
       for (let ci = 0; ci < panel.characters_present.length; ci++) {
-        const charImg = latestProject.images && latestProject.images['char-' + panel.characters_present[ci]];
-        if (charImg && charImg.type === 'comfyui') { refImage = charImg.filename; break; }
-        else if (charImg && charImg.type === 'upload') { refImage = charImg.data; break; }
-        else if (typeof charImg === 'string' && charImg) { refImage = charImg; break; }
+        refImage = StorageManager.getCharRefFilename(projectId, panel.characters_present[ci]);
+        if (refImage) break;
       }
     }
 
