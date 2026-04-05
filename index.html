@@ -1,2 +1,435 @@
 <!DOCTYPE html>
-<html><head><meta http-equiv="refresh" content="0;url=bd.html"></head><body></body></html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Afrotok Stories — Storybook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&display=swap" rel="stylesheet">
+<style>
+/*──────────────────────────────────────────────
+  RESET & BASE
+──────────────────────────────────────────────*/
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{
+  background:#0d0d0d;
+  color:#faf6f0;
+  font-family:'Lora',Georgia,serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+/*──────────────────────────────────────────────
+  ÉCRAN 1 — SAISIE JSON
+──────────────────────────────────────────────*/
+.input-screen{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;padding:40px 20px;
+  background:radial-gradient(ellipse at 50% 30%,#1a1508 0%,#0d0d0d 70%);
+}
+.input-screen h1{
+  font-family:'Playfair Display',serif;font-weight:900;
+  font-size:clamp(2rem,6vw,3.6rem);color:#D4AF37;
+  letter-spacing:4px;text-transform:uppercase;
+  text-shadow:0 2px 20px rgba(212,175,55,.3);
+  margin-bottom:6px;
+}
+.input-screen .subtitle{
+  font-family:'Playfair Display',serif;font-style:italic;
+  font-size:1rem;color:#8a7a55;letter-spacing:3px;margin-bottom:36px;
+}
+.json-area{
+  width:100%;max-width:640px;min-height:260px;
+  background:#111;border:1px solid #2a2a2a;border-radius:8px;
+  color:#D4AF37;font-family:'Courier New',monospace;font-size:.82rem;
+  padding:16px;resize:vertical;outline:none;line-height:1.6;
+  transition:border-color .3s;
+}
+.json-area:focus{border-color:#D4AF37}
+.json-area::placeholder{color:#4a4a3a}
+.error-msg{
+  color:#c44;font-size:.85rem;margin-top:10px;
+  min-height:1.2em;text-align:center;font-style:italic;
+}
+.btn-open{
+  margin-top:20px;padding:16px 48px;
+  background:transparent;border:2px solid #D4AF37;color:#D4AF37;
+  font-family:'Playfair Display',serif;font-size:1.1rem;
+  letter-spacing:3px;cursor:pointer;transition:all .3s;
+  text-transform:uppercase;
+}
+.btn-open:hover{background:#D4AF37;color:#0d0d0d;transform:scale(1.03)}
+.link-example{
+  margin-top:16px;color:#5a5a4a;font-size:.8rem;
+  cursor:pointer;text-decoration:underline;transition:color .2s;
+  background:none;border:none;font-family:'Lora',serif;
+}
+.link-example:hover{color:#D4AF37}
+
+/*──────────────────────────────────────────────
+  ÉCRAN 2 — LE LIVRE
+──────────────────────────────────────────────*/
+.book-screen{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;padding:20px;
+  background:#0d0d0d;position:relative;
+}
+.btn-back{
+  position:absolute;top:20px;left:24px;
+  background:none;border:1px solid #3a3a2a;color:#8a7a55;
+  padding:8px 18px;font-family:'Lora',serif;font-size:.8rem;
+  cursor:pointer;letter-spacing:1px;transition:all .2s;border-radius:2px;
+}
+.btn-back:hover{border-color:#D4AF37;color:#D4AF37}
+
+/* Book container */
+.book-container{
+  perspective:2000px;
+  width:min(90vw,920px);
+  height:min(70vh,600px);
+}
+.book{
+  position:relative;width:100%;height:100%;
+  transform-style:preserve-3d;
+  box-shadow:0 30px 80px rgba(0,0,0,.8),0 0 120px rgba(0,0,0,.5);
+  border-radius:4px;
+}
+
+/* Spread (double page) */
+.spread{
+  position:absolute;inset:0;
+  display:grid;grid-template-columns:1fr 1fr;
+  border-radius:4px;overflow:hidden;
+  backface-visibility:hidden;
+}
+
+/* Page turn animation classes */
+.spread-enter{animation:pageIn .6s ease-in-out forwards}
+.spread-exit{animation:pageOut .6s ease-in-out forwards}
+@keyframes pageIn{
+  from{transform:rotateY(90deg);opacity:0}
+  to{transform:rotateY(0deg);opacity:1}
+}
+@keyframes pageOut{
+  from{transform:rotateY(0deg);opacity:1}
+  to{transform:rotateY(-90deg);opacity:0}
+}
+
+/* Page gauche — image */
+.page-left{
+  background:#111;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;position:relative;
+}
+.page-left img{
+  width:100%;height:100%;object-fit:cover;
+}
+/* Placeholder quand pas d'image */
+/* TODO: remplacer par image ComfyUI */
+.placeholder{
+  width:100%;height:100%;
+  background:linear-gradient(160deg,#0d0d0d 0%,#1a1508 40%,#2a1f0a 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;position:relative;
+}
+.placeholder svg{opacity:.25;filter:drop-shadow(0 0 20px rgba(212,175,55,.2))}
+.placeholder .ph-text{
+  font-family:'Playfair Display',serif;font-style:italic;
+  color:#D4AF37;opacity:.5;font-size:.85rem;letter-spacing:2px;
+}
+/* Pli central */
+.page-left::after{
+  content:'';position:absolute;right:0;top:0;bottom:0;width:30px;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.3));
+  pointer-events:none;
+}
+
+/* Page droite — texte */
+.page-right{
+  background:#FAF6F0;color:#1a1a1a;
+  padding:40px 36px 32px;
+  display:flex;flex-direction:column;
+  position:relative;overflow:hidden;
+}
+/* Texture grain subtil */
+.page-right::before{
+  content:'';position:absolute;inset:0;opacity:.03;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events:none;
+}
+/* Pli gauche */
+.page-right::after{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:30px;
+  background:linear-gradient(270deg,transparent,rgba(0,0,0,.06));
+  pointer-events:none;
+}
+.page-header{
+  font-family:'Playfair Display',serif;font-size:.6rem;
+  color:#D4AF37;letter-spacing:4px;text-transform:uppercase;
+  margin-bottom:auto;opacity:.7;text-align:right;
+}
+.page-text{
+  flex:1;display:flex;align-items:center;
+  font-family:'Lora',serif;font-size:clamp(.85rem,1.8vw,1.05rem);
+  line-height:1.85;color:#2a2a2a;
+  text-align:justify;hyphens:auto;
+  position:relative;z-index:1;
+}
+.page-text p{margin:0}
+.page-footer{
+  font-family:'Playfair Display',serif;font-size:.75rem;
+  color:#aaa;text-align:right;margin-top:auto;
+  letter-spacing:1px;
+}
+
+/* Navigation arrows */
+.nav-arrow{
+  position:absolute;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:#3a3a2a;
+  font-size:2.2rem;cursor:pointer;transition:all .3s;
+  padding:20px 14px;z-index:10;
+  font-family:serif;
+}
+.nav-arrow:hover{color:#D4AF37;text-shadow:0 0 20px rgba(212,175,55,.3)}
+.nav-arrow:disabled{opacity:.15;cursor:default;color:#3a3a2a;text-shadow:none}
+.nav-left{left:max(1vw,8px)}
+.nav-right{right:max(1vw,8px)}
+
+/* Last page */
+.btn-restart{
+  margin-top:24px;padding:14px 40px;
+  background:transparent;border:2px solid #D4AF37;color:#D4AF37;
+  font-family:'Playfair Display',serif;font-size:1rem;
+  letter-spacing:3px;cursor:pointer;transition:all .3s;align-self:center;
+}
+.btn-restart:hover{background:#D4AF37;color:#0d0d0d}
+
+/* Page counter mobile */
+.mobile-counter{
+  display:none;margin-top:14px;
+  font-family:'Playfair Display',serif;font-size:.8rem;
+  color:#5a5a4a;letter-spacing:2px;
+}
+
+/*──────────────────────────────────────────────
+  RESPONSIVE
+──────────────────────────────────────────────*/
+@media(max-width:768px){
+  .book-container{width:95vw;height:auto;aspect-ratio:auto;perspective:1200px}
+  .spread{grid-template-columns:1fr;grid-template-rows:45% 55%;min-height:80vh}
+  .page-left::after{display:none}
+  .page-right::after{display:none}
+  .page-right{padding:24px 20px 20px}
+  .nav-arrow{font-size:1.6rem;padding:14px 8px}
+  .mobile-counter{display:block}
+  .page-footer{display:none}
+}
+
+/*──────────────────────────────────────────────
+  TRANSITIONS
+──────────────────────────────────────────────*/
+.fade-in{animation:fadeIn .5s ease forwards}
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const {useState,useRef,useEffect,useCallback} = React;
+
+/* ─── Demo JSON ─── */
+const DEMO = {
+  "titre":"Le Secret du Baobab de Verre",
+  "auteur":"Afrotok Stories",
+  "pages":[
+    {"numero":1,"texte":"Kofi n'avait jamais compris pourquoi sa mère interdisait qu'on s'approche du vieux baobab au fond du village. Chaque soir, elle posait une calebasse d'eau à ses pieds et murmurait des mots que personne ne devait entendre. Ce soir-là, pour la première fois, Kofi décida de ne pas obéir.","image":""},
+    {"numero":2,"texte":"Derrière l'écorce millénaire, il trouva une cavité que personne n'aurait pu deviner de l'extérieur. À l'intérieur\u00a0: un miroir de verre soufflé, aussi fin qu'une aile d'insecte, encadré d'or tressé. Son reflet lui renvoya un visage qu'il ne reconnut pas — celui d'un homme plus vieux, marqué par des années de douleur.","image":""},
+    {"numero":3,"texte":"— Ce miroir appartient à ta lignée depuis sept générations, dit une voix derrière lui. Aminata, la vieille gardienne du village, se tenait là, immobile comme si elle l'attendait. — Il montre ce que tu seras si tu répètes les erreurs de ton père. Kofi sentit son sang se glacer.","image":""},
+    {"numero":4,"texte":"Son père. Ce mot ouvrit une blessure que Kofi croyait cicatrisée. Djibril était parti quand Kofi avait six ans, laissant derrière lui des dettes, une femme brisée, et un fils qui avait juré de ne jamais lui ressembler. Mais le miroir ne mentait pas.","image":""},
+    {"numero":5,"texte":"— Qu'est-ce que je dois faire pour que ce reflet change\u00a0? demanda Kofi, la gorge serrée. Aminata posa sa main ridée sur son épaule. — Il y a une femme en ville qui attend une vérité que tu lui dois depuis trois ans. Tu la connais. Et tu sais exactement ce que tu lui as caché.","image":""},
+    {"numero":6,"texte":"Mariama. Son prénom traversa l'esprit de Kofi comme une braise. Il l'avait aimée. Il l'avait trahie avec un mensonge de silence — le pire des mensonges. Il savait depuis leur première nuit ensemble que la terre sur laquelle sa famille voulait construire appartenait à d'autres. Il n'avait jamais parlé.","image":""},
+    {"numero":7,"texte":"Il revint en ville avant l'aube. Mariama ouvrit sa porte sans surprise, comme si elle aussi avait attendu ce moment. — Je sais déjà, dit-elle simplement. Ce que je veux savoir, c'est pourquoi tu as choisi le silence. Kofi n'avait pas de réponse belle à donner. Alors il dit la vérité laide.","image":""},
+    {"numero":8,"texte":"Les mots sortirent lentement, comme du poison qu'on extrait d'une plaie. Il parla de la peur. De l'argent que sa famille avait déjà dépensé. De la honte qui l'avait paralysé. Mariama l'écouta sans l'interrompre, les bras croisés, les yeux secs. Quand il termina, elle dit\u00a0: — Tu m'as volé trois ans.","image":""},
+    {"numero":9,"texte":"Elle lui demanda deux semaines. Kofi repartit au village et retourna voir le baobab. Cette fois, son reflet avait changé. Le vieil homme dans le miroir souriait — d'un sourire qui ressemblait à de la paix, pas au bonheur facile. Aminata apparut encore. — Le miroir ne montre pas le destin. Il montre ce que tu mérites si tu fais le travail.","image":""},
+    {"numero":10,"texte":"Mariama revint. Pas pour tout effacer — certaines choses ne s'effacent pas. Mais pour construire quelque chose qui connaissait sa propre fragilité. Sous les étoiles, ils parlèrent jusqu'à l'aube d'une vie qui serait plus honnête que la précédente. Le baobab de verre, dit-on, brilla cette nuit-là d'une lumière que seuls les cœurs courageux peuvent voir.","image":""}
+  ]
+};
+
+/* ─── Placeholder SVGs ─── */
+const PLACEHOLDERS = [
+  /* Baobab */
+  <svg key="b" viewBox="0 0 120 120" width="80" height="80"><path d="M60 95 L60 60 Q40 55 35 35 Q33 20 50 15 Q55 5 65 12 Q80 8 82 25 Q90 30 85 45 Q95 55 60 60" fill="none" stroke="#D4AF37" strokeWidth="1.5"/><line x1="45" y1="95" x2="75" y2="95" stroke="#D4AF37" strokeWidth="1"/></svg>,
+  /* Moon */
+  <svg key="m" viewBox="0 0 120 120" width="80" height="80"><circle cx="60" cy="60" r="30" fill="none" stroke="#D4AF37" strokeWidth="1.5"/><circle cx="72" cy="52" r="24" fill="#0d0d0d" stroke="none"/><circle cx="40" cy="30" r="1.5" fill="#D4AF37" opacity=".5"/><circle cx="85" cy="75" r="1" fill="#D4AF37" opacity=".4"/><circle cx="25" cy="70" r="1.2" fill="#D4AF37" opacity=".3"/></svg>,
+  /* Face */
+  <svg key="f" viewBox="0 0 120 120" width="80" height="80"><ellipse cx="60" cy="55" rx="22" ry="28" fill="none" stroke="#D4AF37" strokeWidth="1.5"/><circle cx="52" cy="50" r="2" fill="#D4AF37" opacity=".6"/><circle cx="68" cy="50" r="2" fill="#D4AF37" opacity=".6"/><path d="M54 62 Q60 68 66 62" fill="none" stroke="#D4AF37" strokeWidth="1" opacity=".5"/></svg>,
+  /* Star */
+  <svg key="s" viewBox="0 0 120 120" width="80" height="80"><polygon points="60,15 68,45 100,45 74,63 82,95 60,75 38,95 46,63 20,45 52,45" fill="none" stroke="#D4AF37" strokeWidth="1.5"/></svg>,
+  /* Mask */
+  <svg key="k" viewBox="0 0 120 120" width="80" height="80"><ellipse cx="60" cy="58" rx="26" ry="34" fill="none" stroke="#D4AF37" strokeWidth="1.5"/><ellipse cx="50" cy="48" rx="6" ry="4" fill="none" stroke="#D4AF37" strokeWidth="1"/><ellipse cx="70" cy="48" rx="6" ry="4" fill="none" stroke="#D4AF37" strokeWidth="1"/><path d="M50 68 Q60 78 70 68" fill="none" stroke="#D4AF37" strokeWidth="1.2"/><line x1="60" y1="24" x2="60" y2="16" stroke="#D4AF37" strokeWidth="1"/><line x1="44" y1="28" x2="38" y2="20" stroke="#D4AF37" strokeWidth="1"/><line x1="76" y1="28" x2="82" y2="20" stroke="#D4AF37" strokeWidth="1"/></svg>
+];
+
+function getPlaceholder(n) { return PLACEHOLDERS[n % PLACEHOLDERS.length]; }
+
+/* ─── Placeholder Component ─── */
+function PlaceholderImage({pageNum, totalPages}) {
+  return (
+    <div className="placeholder">
+      {getPlaceholder(pageNum - 1)}
+      <span className="ph-text">Page {pageNum}</span>
+    </div>
+  );
+}
+
+/* ─── Page Spread ─── */
+function Spread({page, totalPages, titre, animClass, isLast, onRestart}) {
+  const hasImage = page.image && page.image.trim() !== '';
+  return (
+    <div className={`spread ${animClass}`}>
+      <div className="page-left">
+        {hasImage
+          ? <img src={page.image} alt={`Page ${page.numero}`} />
+          : <PlaceholderImage pageNum={page.numero} totalPages={totalPages} />
+        }
+      </div>
+      <div className="page-right">
+        <div className="page-header">Afrotok Stories</div>
+        <div className="page-text"><p>{page.texte}</p></div>
+        {isLast
+          ? <button className="btn-restart" onClick={onRestart}>↺ Recommencer</button>
+          : <div className="page-footer">{page.numero} / {totalPages}</div>
+        }
+      </div>
+    </div>
+  );
+}
+
+/* ─── Book Viewer ─── */
+function BookViewer({data, onBack}) {
+  const [pageIdx, setPageIdx] = useState(0);
+  const [anim, setAnim] = useState('fade-in');
+  const touchRef = useRef(null);
+  const busyRef = useRef(false);
+  const pages = data.pages;
+
+  const go = useCallback((dir) => {
+    if (busyRef.current) return;
+    const next = pageIdx + dir;
+    if (next < 0 || next >= pages.length) return;
+    busyRef.current = true;
+    setAnim('spread-exit');
+    setTimeout(() => {
+      setPageIdx(next);
+      setAnim('spread-enter');
+      setTimeout(() => { busyRef.current = false; }, 600);
+    }, 500);
+  }, [pageIdx, pages.length]);
+
+  /* Keyboard */
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') go(1);
+      else if (e.key === 'ArrowLeft') go(-1);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [go]);
+
+  /* Touch swipe */
+  const onTouchStart = (e) => { touchRef.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (touchRef.current === null) return;
+    const diff = touchRef.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) go(diff > 0 ? 1 : -1);
+    touchRef.current = null;
+  };
+
+  return (
+    <div className="book-screen" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <button className="btn-back" onClick={onBack}>← Retour</button>
+
+      <button className="nav-arrow nav-left" onClick={() => go(-1)} disabled={pageIdx === 0}>‹</button>
+
+      <div className="book-container">
+        <div className="book">
+          <Spread
+            key={pageIdx}
+            page={pages[pageIdx]}
+            totalPages={pages.length}
+            titre={data.titre}
+            animClass={anim}
+            isLast={pageIdx === pages.length - 1}
+            onRestart={() => { setPageIdx(0); setAnim('fade-in'); }}
+          />
+        </div>
+      </div>
+
+      <button className="nav-arrow nav-right" onClick={() => go(1)} disabled={pageIdx === pages.length - 1}>›</button>
+
+      <div className="mobile-counter">{pageIdx + 1} / {pages.length}</div>
+    </div>
+  );
+}
+
+/* ─── Input Screen ─── */
+function InputScreen({onOpen}) {
+  const [json, setJson] = useState('');
+  const [error, setError] = useState('');
+
+  const handleOpen = () => {
+    setError('');
+    if (!json.trim()) { setError('Collez un JSON pour commencer.'); return; }
+    try {
+      const match = json.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('Aucun JSON trouvé.');
+      const data = JSON.parse(match[0]);
+      if (!data.pages || !Array.isArray(data.pages) || data.pages.length === 0)
+        throw new Error('Le JSON doit contenir un tableau "pages" non vide.');
+      if (!data.titre) data.titre = 'Sans titre';
+      if (!data.auteur) data.auteur = 'Inconnu';
+      onOpen(data);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const loadExample = () => {
+    setJson(JSON.stringify(DEMO, null, 2));
+    setError('');
+  };
+
+  return (
+    <div className="input-screen fade-in">
+      <h1>Afrotok Stories</h1>
+      <div className="subtitle">Micro-Drama Africain</div>
+      <textarea
+        className="json-area"
+        value={json}
+        onChange={e => setJson(e.target.value)}
+        placeholder={'Collez votre JSON ici...\n\n{\n  "titre": "...",\n  "auteur": "...",\n  "pages": [\n    { "numero": 1, "texte": "...", "image": "" }\n  ]\n}'}
+        spellCheck="false"
+      />
+      <div className="error-msg">{error}</div>
+      <button className="btn-open" onClick={handleOpen}>Ouvrir le livre →</button>
+      <button className="link-example" onClick={loadExample}>Voir un exemple</button>
+    </div>
+  );
+}
+
+/* ─── App ─── */
+function App() {
+  const [data, setData] = useState(null);
+  return data
+    ? <BookViewer data={data} onBack={() => setData(null)} />
+    : <InputScreen onOpen={setData} />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
