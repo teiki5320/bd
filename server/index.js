@@ -1,0 +1,256 @@
+import './config.js';
+import express from 'express';
+import path from 'node:path';
+import fs from 'node:fs';
+import { execFile } from 'node:child_process';
+import { PORT, DIST_DIR } from './config.js';
+import { EPISODE_COUNT } from '../shared/catalog.js';
+import {
+  listProjects,
+  loadProject,
+  saveProject,
+  deleteProject,
+  projectDir,
+  findEpisode,
+  findScene,
+} from './projects.js';
+import { startJob, getJob } from './jobs.js';
+import {
+  createProject,
+  produceEpisode,
+  regenerateSceneImage,
+  regenerateSceneAudio,
+  saveUploadedImage,
+  saveUploadedMusic,
+} from './pipeline.js';
+import { renderEpisode } from './render.js';
+import { currentProvider } from './images.js';
+
+const app = express();
+app.use(express.json({ limit: '60mb' }));
+
+// ---------- Santé ----------
+app.get('/api/health', (req, res) => {
+  execFile('claude', ['--version'], { timeout: 15000 }, (err, stdout) => {
+    res.json({
+      ok: true,
+      claude: err ? null : String(stdout).trim(),
+      imageProvider: currentProvider(),
+      episodeCount: EPISODE_COUNT,
+    });
+  });
+});
+
+// ---------- Projets ----------
+app.get('/api/projects', (req, res) => {
+  res.json(listProjects());
+});
+
+app.post('/api/projects', (req, res) => {
+  const { styles, theme } = req.body || {};
+  if (!Array.isArray(styles) || styles.length < 1 || styles.length > 3) {
+    res.status(400).json({ error: 'Choisis 1 à 3 styles.' });
+    return;
+  }
+  const job = startJob('Création du drama', (update) =>
+    createProject({ styles, theme: (theme || '').slice(0, 500) }, update),
+  );
+  res.json({ jobId: job.id });
+});
+
+app.get('/api/projects/:id', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  res.json(p);
+});
+
+app.delete('/api/projects/:id', (req, res) => {
+  deleteProject(req.params.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/projects/:id/music', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  try {
+    const file = saveUploadedMusic(p, req.body.data || '');
+    res.json({ ok: true, file });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// ---------- Épisodes ----------
+function withEpisode(req, res, fn) {
+  const p = loadProject(req.params.id);
+  const ep = p && findEpisode(p, req.params.n);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  fn(p, ep);
+}
+
+app.post('/api/projects/:id/episodes/:n/produce', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  const n = Number(req.params.n);
+  if (!(n >= 1 && n <= EPISODE_COUNT)) {
+    res.status(400).json({ error: `Numéro d'épisode invalide (1 à ${EPISODE_COUNT}).` });
+    return;
+  }
+  const job = startJob(`Production épisode ${n}`, (update) => produceEpisode(p, n, update));
+  res.json({ jobId: job.id });
+});
+
+app.post('/api/projects/:id/episodes/:n/render', (req, res) => {
+  withEpisode(req, res, (p, ep) => {
+    if (!ep) {
+      res.status(404).json({ error: 'Épisode introuvable' });
+      return;
+    }
+    const job = startJob(`Rendu épisode ${ep.number}`, (update) => renderEpisode(p, ep, update));
+    res.json({ jobId: job.id });
+  });
+});
+
+// ---------- Scènes ----------
+function withScene(req, res, fn) {
+  const p = loadProject(req.params.id);
+  const ep = p && findEpisode(p, req.params.n);
+  const scene = ep && findScene(ep, req.params.sceneId);
+  if (!p || !ep || !scene) {
+    res.status(404).json({ error: 'Scène introuvable' });
+    return;
+  }
+  fn(p, ep, scene);
+}
+
+app.patch('/api/projects/:id/episodes/:n/scenes/:sceneId', (req, res) => {
+  withScene(req, res, (p, ep, scene) => {
+    const { lines, imagePrompt, kenBurns, durationSec } = req.body || {};
+    if (Array.isArray(lines)) {
+      scene.lines = lines
+        .filter((l) => l && typeof l.text === 'string' && l.text.trim())
+        .slice(0, 4)
+        .map((l, j) => {
+          const prev = scene.lines[j];
+          const unchanged = prev && prev.text === l.text.trim() && prev.speaker === (l.speaker || 'narrator');
+          return {
+            speaker: l.speaker || 'narrator',
+            text: l.text.trim(),
+            audio: unchanged ? prev.audio : null,
+            audioDurationSec: unchanged ? prev.audioDurationSec : null,
+          };
+        });
+    }
+    if (typeof imagePrompt === 'string') {
+      scene.imagePrompt = imagePrompt.trim();
+    }
+    if (typeof kenBurns === 'string') {
+      scene.kenBurns = kenBurns;
+    }
+    if (typeof durationSec === 'number' && durationSec >= 2 && durationSec <= 20) {
+      scene.durationSec = durationSec;
+    }
+    if (ep.status === 'done') {
+      ep.status = 'ready';
+    }
+    saveProject(p);
+    res.json(p);
+  });
+});
+
+app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/image', (req, res) => {
+  withScene(req, res, (p, ep, scene) => {
+    if (typeof req.body.imagePrompt === 'string' && req.body.imagePrompt.trim()) {
+      scene.imagePrompt = req.body.imagePrompt.trim();
+    }
+    const job = startJob('Nouvelle image', (update) => regenerateSceneImage(p, ep, scene, update));
+    res.json({ jobId: job.id });
+  });
+});
+
+app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/audio', (req, res) => {
+  withScene(req, res, (p, ep, scene) => {
+    const job = startJob('Nouvelles voix', (update) => regenerateSceneAudio(p, ep, scene, update));
+    res.json({ jobId: job.id });
+  });
+});
+
+app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/upload-image', (req, res) => {
+  withScene(req, res, (p, ep, scene) => {
+    try {
+      const file = saveUploadedImage(p, ep, scene, req.body.data || '');
+      res.json({ ok: true, file });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+});
+
+// ---------- Jobs ----------
+app.get('/api/jobs/:id', (req, res) => {
+  const job = getJob(req.params.id);
+  if (!job) {
+    res.status(404).json({ error: 'Job introuvable' });
+    return;
+  }
+  res.json(job);
+});
+
+// ---------- Fichiers des projets (images, voix, rendus) ----------
+app.get('/files/:id/*', (req, res) => {
+  let dir;
+  try {
+    dir = projectDir(req.params.id);
+  } catch {
+    res.status(400).end();
+    return;
+  }
+  const rel = req.params[0] || '';
+  // `renders/<f>` est servi depuis le dossier des rendus, tout le reste depuis assets/.
+  const base = rel.startsWith('renders/') ? path.join(dir, 'renders') : path.join(dir, 'assets');
+  const target = rel.startsWith('renders/') ? path.join(dir, rel) : path.join(base, rel);
+  const resolved = path.resolve(target);
+  if (!resolved.startsWith(path.resolve(base) + path.sep)) {
+    res.status(403).end();
+    return;
+  }
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+    res.status(404).end();
+    return;
+  }
+  res.sendFile(resolved);
+});
+
+// ---------- Front (build Vite) ----------
+if (fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/files/')) {
+      next();
+      return;
+    }
+    res.sendFile(path.join(DIST_DIR, 'index.html'));
+  });
+}
+
+app.listen(PORT, '127.0.0.1', () => {
+  console.log('');
+  console.log('  🎬 Drama Studio');
+  console.log(`  → http://localhost:${PORT}`);
+  if (!fs.existsSync(DIST_DIR)) {
+    console.log('  (interface non construite : lance `npm run dev` ou `npm run build`)');
+  }
+  console.log('');
+});
