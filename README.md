@@ -69,11 +69,22 @@ Au premier épisode, l'app génère un **portrait de référence** par personnag
 du projet, avec un bouton 🔄 pour les refaire), puis chaque scène est générée en passant ces
 portraits comme références de visage.
 
+## Les voix
+
+Trois moteurs, essayés dans cet ordre en mode `auto` :
+
+| Moteur | Qualité | Configuration |
+|---|---|---|
+| **ElevenLabs** | ⭐⭐⭐ studio, voix naturelles | `ELEVENLABS_API_KEY=...` dans `.env` (compte gratuit ~10 000 caractères/mois ≈ 1 saison, puis ~5 $/mois) |
+| **Edge TTS** | ⭐⭐ bonnes voix neuronales | Rien — mais le service non officiel est parfois bloqué par Microsoft |
+| **Voix macOS** | ⭐ à ⭐⭐ selon les voix installées | Rien. Pour un gros gain gratuit : Réglages Système → Accessibilité → Contenu énoncé → Voix du système → **télécharger les voix françaises « Premium » / « Enhanced »** (Audrey, Thomas, Aurélie, Nicolas, Amélie…). L'app choisit automatiquement la meilleure variante installée. |
+
+Chaque personnage garde une voix distincte (selon son genre) quel que soit le moteur.
+
 ## Notes techniques
 
 - **Claude** est appelé en mode headless (`claude -p`) : la génération de scénario passe par
   ton abonnement, dans les limites d'usage de ton forfait.
-- **Voix** : synthèse Edge TTS (gratuite), voix françaises distinctes par personnage.
 - **Rendu vidéo** : Remotion (`@remotion/renderer`), H.264 1080×1920, 30 i/s. Le premier rendu
   télécharge un navigateur headless (~150 Mo), les suivants sont directs.
 - **Stockage** : tout est sur ton disque, dans `projects/` (un dossier par drama).

@@ -42,10 +42,25 @@ const FEMALE_VOICES = [
   'fr-FR-JacquelineNeural',
 ];
 
-// Voix macOS (`say`) — plan B local quand Edge TTS est inaccessible.
+// Voix macOS (`say`) — plan B local quand les services en ligne sont inaccessibles.
 const SAY_MALE = ['Thomas', 'Nicolas'];
 const SAY_FEMALE = ['Amélie', 'Audrey', 'Aurélie', 'Chantal'];
 const NARRATOR_SAY = 'Thomas';
+
+// Voix ElevenLabs (préinstallées, multilingues — parlent français naturellement).
+const ELEVEN_MALE = [
+  'onwK4e9ZLuTAKqWW03F9', // Daniel — posé
+  'nPczCjzI2devNBz1zQrb', // Brian — profond
+  'cjVigY5qzO86Huf0OWal', // Eric — chaleureux
+  'bIHbv24MWmeRgasZH58o', // Will — jeune
+];
+const ELEVEN_FEMALE = [
+  'EXAVITQu4vr4xnSDxMaL', // Sarah — douce
+  'XB0fDUnXU5powFXDhCwa', // Charlotte — expressive
+  'FGY2WhTYpPnrIDTdsKH5', // Laura — vive
+  'pFZP5JQG7iQjIQuC4Bku', // Lily — posée
+];
+const ELEVEN_NARRATOR = 'onwK4e9ZLuTAKqWW03F9';
 
 // Attribue une voix distincte à chaque personnage selon son genre.
 export function assignVoices(characters) {
@@ -55,14 +70,98 @@ export function assignVoices(characters) {
     if ((c.gender || '').toLowerCase().startsWith('f')) {
       c.voice = FEMALE_VOICES[f % FEMALE_VOICES.length];
       c.sayVoice = SAY_FEMALE[f % SAY_FEMALE.length];
+      c.elevenVoice = ELEVEN_FEMALE[f % ELEVEN_FEMALE.length];
       f++;
     } else {
       c.voice = MALE_VOICES[m % MALE_VOICES.length];
       c.sayVoice = SAY_MALE[m % SAY_MALE.length];
+      c.elevenVoice = ELEVEN_MALE[m % ELEVEN_MALE.length];
       m++;
     }
   }
   return characters;
+}
+
+// ---------- ElevenLabs (qualité studio, clé requise) ----------
+async function synthesizeEleven(text, voiceId, outPath) {
+  const key = process.env.ELEVENLABS_API_KEY;
+  if (!key) {
+    throw new Error('ELEVENLABS_API_KEY absente du .env');
+  }
+  const res = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+    {
+      method: 'POST',
+      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35 },
+      }),
+      signal: AbortSignal.timeout(120000),
+    },
+  );
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    if (res.status === 401) {
+      throw new Error('ElevenLabs : clé API invalide.');
+    }
+    if (res.status === 429 || /quota/i.test(t)) {
+      throw new Error('ElevenLabs : quota de caractères épuisé.');
+    }
+    throw new Error(`ElevenLabs ${res.status} : ${t.slice(0, 200)}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length < 1000) {
+    throw new Error('ElevenLabs : audio vide.');
+  }
+  fs.writeFileSync(outPath, buf);
+  return audioDurationSec(outPath);
+}
+
+// ---------- Détection des meilleures voix macOS installées ----------
+// Les voix "Premium"/"Enhanced" (à télécharger dans Réglages Système →
+// Accessibilité → Contenu énoncé) sont bien plus naturelles que les compactes.
+let sayVoicesPromise = null;
+function installedFrenchSayVoices() {
+  if (!sayVoicesPromise) {
+    sayVoicesPromise = execFileP('say', ['-v', '?'])
+      .then((out) =>
+        String(out)
+          .split('\n')
+          .map((l) => {
+            const m = l.match(/^(.+?)\s{2,}([a-z]{2}[_-][A-Z]{2})\s/);
+            return m ? { name: m[1].trim(), locale: m[2] } : null;
+          })
+          .filter((v) => v && v.locale.toLowerCase().startsWith('fr')),
+      )
+      .catch(() => []);
+  }
+  return sayVoicesPromise;
+}
+
+function sayQuality(name) {
+  if (/premium/i.test(name)) return 3;
+  if (/enhanced|améliorée/i.test(name)) return 2;
+  return 1;
+}
+
+async function resolveBestSayVoice(baseName) {
+  const voices = await installedFrenchSayVoices();
+  if (voices.length === 0) {
+    return baseName || null;
+  }
+  const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const candidates = baseName
+    ? voices.filter((v) => norm(v.name).startsWith(norm(baseName)))
+    : [];
+  const pool = candidates.length > 0 ? candidates : voices;
+  pool.sort(
+    (a, b) =>
+      sayQuality(b.name) - sayQuality(a.name) ||
+      (b.locale === 'fr_FR' ? 1 : 0) - (a.locale === 'fr_FR' ? 1 : 0),
+  );
+  return pool[0].name;
 }
 
 export async function audioDurationSec(file) {
@@ -111,13 +210,15 @@ async function synthesizeEdge(text, voice, outPath) {
 }
 
 // Synthèse via la voix intégrée de macOS (`say`) — 100 % locale, écrit un M4A.
+// Utilise automatiquement la meilleure variante installée (Premium > Enhanced).
 async function synthesizeSay(text, sayVoice, outBase) {
   const aiff = `${outBase}.aiff`;
   const m4a = `${outBase}.m4a`;
+  const voice = await resolveBestSayVoice(sayVoice);
   try {
-    if (sayVoice) {
+    if (voice) {
       try {
-        await execFileP('say', ['-v', sayVoice, '-o', aiff, text]);
+        await execFileP('say', ['-v', voice, '-o', aiff, text]);
       } catch {
         // voix non installée sur ce Mac → voix française par défaut
         await execFileP('say', ['-o', aiff, text]);
@@ -140,16 +241,46 @@ async function synthesizeSay(text, sayVoice, outBase) {
 let edgeFailedAt = 0;
 const EDGE_RETRY_AFTER_MS = 10 * 60 * 1000;
 
-// Synthétise une réplique : Edge TTS d'abord, voix macOS en secours.
-// TTS_PROVIDER=say ou =edge dans .env pour forcer l'un des deux.
+// Décrit la chaîne de voix active (affichée dans l'interface).
+export function ttsInfo() {
+  const pref = (process.env.TTS_PROVIDER || 'auto').toLowerCase();
+  if (pref !== 'auto') {
+    return pref;
+  }
+  if (process.env.ELEVENLABS_API_KEY) {
+    return 'elevenlabs';
+  }
+  return process.platform === 'darwin' ? 'edge → voix macOS' : 'edge';
+}
+
+// Synthétise une réplique. Ordre en mode auto :
+//   ElevenLabs (si clé) → Edge TTS → voix macOS.
+// TTS_PROVIDER=elevenlabs | edge | say dans .env pour forcer un moteur.
 // Retourne { file (chemin complet), durationSec }.
-export async function synthesize({ text, edgeVoice, sayVoice, outBase }) {
+export async function synthesize({ text, edgeVoice, sayVoice, elevenVoice, outBase }) {
   const pref = (process.env.TTS_PROVIDER || 'auto').toLowerCase();
   const canSay = process.platform === 'darwin';
+  const hasElevenKey = Boolean(process.env.ELEVENLABS_API_KEY);
+
+  // 1. ElevenLabs — qualité studio
+  if (pref === 'elevenlabs' || (pref === 'auto' && hasElevenKey)) {
+    try {
+      const mp3 = `${outBase}.mp3`;
+      const durationSec = await synthesizeEleven(text, elevenVoice, mp3);
+      return { file: mp3, durationSec };
+    } catch (e) {
+      if (pref === 'elevenlabs') {
+        throw e;
+      }
+      console.error('ElevenLabs indisponible, bascule :', e.message);
+    }
+  }
+
+  // 2. Edge TTS — gratuit, en ligne
   const skipEdge =
     pref === 'say' ||
     (pref === 'auto' && canSay && Date.now() - edgeFailedAt < EDGE_RETRY_AFTER_MS);
-  if (!skipEdge) {
+  if (pref !== 'elevenlabs' && !skipEdge) {
     try {
       const mp3 = `${outBase}.mp3`;
       const durationSec = await synthesizeEdge(text, edgeVoice, mp3);
@@ -161,6 +292,8 @@ export async function synthesize({ text, edgeVoice, sayVoice, outBase }) {
       }
     }
   }
+
+  // 3. Voix macOS — locale, infaillible
   if (!canSay) {
     throw new Error('Aucune méthode de synthèse vocale disponible sur cette machine.');
   }
@@ -170,15 +303,16 @@ export async function synthesize({ text, edgeVoice, sayVoice, outBase }) {
 
 export function voiceFor(project, speaker) {
   if (speaker === 'narrator') {
-    return { edgeVoice: NARRATOR_VOICE, sayVoice: NARRATOR_SAY };
+    return { edgeVoice: NARRATOR_VOICE, sayVoice: NARRATOR_SAY, elevenVoice: ELEVEN_NARRATOR };
   }
   const c = (project.characters || []).find((x) => x.id === speaker);
+  const female = c ? (c.gender || '').toLowerCase().startsWith('f') : false;
   if (!c) {
-    return { edgeVoice: NARRATOR_VOICE, sayVoice: NARRATOR_SAY };
+    return { edgeVoice: NARRATOR_VOICE, sayVoice: NARRATOR_SAY, elevenVoice: ELEVEN_NARRATOR };
   }
-  const female = (c.gender || '').toLowerCase().startsWith('f');
   return {
     edgeVoice: c.voice || (female ? FEMALE_VOICES[0] : MALE_VOICES[0]),
     sayVoice: c.sayVoice || (female ? SAY_FEMALE[0] : SAY_MALE[0]),
+    elevenVoice: c.elevenVoice || (female ? ELEVEN_FEMALE[0] : ELEVEN_MALE[0]),
   };
 }
