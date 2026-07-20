@@ -1,12 +1,44 @@
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 
 // Génération d'images via le MCP officiel OpenArt (https://mcp.openart.ai/mcp),
 // piloté par Claude Code en mode headless. Le MCP doit être enregistré sur la
-// machine (`claude mcp add --transport http --scope user openart https://mcp.openart.ai/mcp`)
-// et authentifié une fois via `/mcp`.
+// machine et authentifié une fois via `/mcp`.
 
-const MCP_NAME = process.env.OPENART_MCP_NAME || 'openart';
 const TIMEOUT_MS = 8 * 60 * 1000;
+
+// Détecte le nom sous lequel le MCP OpenArt est enregistré (`claude mcp list`).
+let mcpNamePromise = null;
+function detectMcpName() {
+  if (process.env.OPENART_MCP_NAME) {
+    return Promise.resolve(process.env.OPENART_MCP_NAME);
+  }
+  if (!mcpNamePromise) {
+    mcpNamePromise = new Promise((resolve, reject) => {
+      execFile('claude', ['mcp', 'list'], { timeout: 60000 }, (err, stdout) => {
+        const lines = String(stdout || '').split('\n');
+        const hit = lines.find((l) => /openart/i.test(l));
+        if (hit) {
+          const name = hit.split(':')[0].trim();
+          if (name) {
+            resolve(name);
+            return;
+          }
+        }
+        reject(
+          new Error(
+            "Le MCP OpenArt n'est pas installé sur cette machine. Installe-le avec : " +
+              'claude mcp add --transport http --scope user openart https://mcp.openart.ai/mcp ' +
+              "puis authentifie-le via `claude` → /mcp → openart.",
+          ),
+        );
+      });
+    });
+    mcpNamePromise.catch(() => {
+      mcpNamePromise = null;
+    });
+  }
+  return mcpNamePromise;
+}
 
 function buildInstruction(prompt, referenceUrls) {
   const refs =
@@ -20,7 +52,7 @@ function buildInstruction(prompt, referenceUrls) {
 Attends la fin de la génération. Puis réponds UNIQUEMENT avec l'URL directe du fichier image généré (une seule ligne, aucune autre phrase). Si la génération échoue, réponds "ERREUR: " suivi de la cause exacte.`;
 }
 
-function runClaude(instruction) {
+function runClaude(instruction, mcpName) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       'claude',
@@ -30,7 +62,7 @@ function runClaude(instruction) {
         '--output-format',
         'json',
         '--allowedTools',
-        `mcp__${MCP_NAME},mcp__${MCP_NAME}__*`,
+        `mcp__${mcpName},mcp__${mcpName}__*`,
       ],
       { stdio: ['ignore', 'pipe', 'pipe'], env: process.env },
     );
@@ -77,10 +109,11 @@ async function downloadImage(url) {
 
 // Retourne { buffer, url } — l'URL sert de référence de visage pour les scènes suivantes.
 export async function openartGenerate({ prompt, referenceUrls = [] }) {
+  const mcpName = await detectMcpName();
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const text = await runClaude(buildInstruction(prompt, referenceUrls));
+      const text = await runClaude(buildInstruction(prompt, referenceUrls), mcpName);
       if (/^ERREUR\s*:/i.test(text)) {
         const cause = text.replace(/^ERREUR\s*:/i, '').trim();
         if (/credit|crédit/i.test(cause)) {
@@ -88,7 +121,7 @@ export async function openartGenerate({ prompt, referenceUrls = [] }) {
         }
         if (/auth|connect|login|token/i.test(cause)) {
           throw new Error(
-            `OpenArt : problème d'authentification MCP — relance \`claude\`, tape /mcp, et reconnecte "${MCP_NAME}". (${cause})`,
+            `OpenArt : problème d'authentification MCP — relance \`claude\`, tape /mcp, et reconnecte "${mcpName}". (${cause})`,
           );
         }
         throw new Error(`OpenArt : ${cause}`);
