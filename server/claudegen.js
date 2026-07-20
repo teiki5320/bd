@@ -33,7 +33,30 @@ export function askClaude(prompt, { timeoutMs = 15 * 60 * 1000 } = {}) {
     child.on('close', (code) => {
       clearTimeout(timer);
       if (code !== 0) {
-        reject(new Error(`claude -p a échoué (code ${code}) : ${err.slice(0, 500)}`));
+        // Le message d'erreur de Claude Code sort tantôt sur stderr, tantôt
+        // dans l'enveloppe JSON sur stdout — on remonte les deux.
+        let detail = `${err}\n${out}`.trim();
+        try {
+          const envelope = JSON.parse(out);
+          if (envelope.result) {
+            detail = String(envelope.result);
+          }
+        } catch {
+          // stdout n'était pas du JSON — garder le texte brut
+        }
+        if (/login|logged out|authenticat|api key|credential|oauth|expired/i.test(detail)) {
+          reject(
+            new Error(
+              "Claude Code n'est pas connecté : dans un terminal, lance `claude`, tape `/login` pour te connecter, puis réessaie ici.",
+            ),
+          );
+          return;
+        }
+        reject(
+          new Error(
+            `claude -p a échoué (code ${code}) : ${detail.slice(0, 600) || 'aucun message renvoyé'}`,
+          ),
+        );
         return;
       }
       try {
