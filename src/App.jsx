@@ -37,8 +37,8 @@ function CreationProgress({ job, error }) {
       )}
       {error && <p className="error">{error}</p>}
       <p className="hint">
-        L'écriture du scénario prend 1 à 3 minutes, puis les images et les voix sont générées
-        scène par scène. Tu peux laisser cette fenêtre ouverte.
+        Claude écrit le scénario complet (1 à 3 minutes). Ensuite tu pourras le valider ou le
+        régénérer, puis valider les visages des personnages, avant de produire l'épisode 1.
       </p>
     </div>
   );

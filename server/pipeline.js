@@ -134,7 +134,7 @@ async function generateEpisodeAssets(project, episode, update) {
     }
   }
 
-  // 2. Voix
+  // 2. Voix (Edge TTS, puis voix macOS en secours)
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
     update(`Épisode ${episode.number} — voix ${i + 1}/${scenes.length}…`, i / scenes.length);
@@ -143,14 +143,16 @@ async function generateEpisodeAssets(project, episode, update) {
       if (line.audio) {
         continue;
       }
-      const file = `e${episode.number}_${scene.id}_l${j}_v${scene.version}.mp3`;
+      const base = `e${episode.number}_${scene.id}_l${j}_v${scene.version}`;
       try {
-        line.audioDurationSec = await synthesize(
-          line.text,
-          voiceFor(project, line.speaker),
-          path.join(dir, file),
-        );
-        line.audio = file;
+        const { file, durationSec } = await synthesize({
+          text: line.text,
+          ...voiceFor(project, line.speaker),
+          outBase: path.join(dir, base),
+        });
+        line.audio = path.basename(file);
+        line.audioDurationSec = durationSec;
+        delete line.audioError;
       } catch (e) {
         console.error(`Voix scène ${scene.id} ligne ${j} :`, e.message);
         line.audioError = e.message;
@@ -207,10 +209,42 @@ export async function createProject({ styles, theme }, update) {
     throw new Error("Claude n'a pas fourni l'épisode 1.");
   }
   project.episodes.push(normalizeEpisode(ep1raw, 1));
+  // Parcours par étapes : le scénario doit être validé avant toute production.
+  project.stage = 'script_review';
   saveProject(project);
-
-  await generateEpisodeAssets(project, project.episodes[0], update);
   return { projectId: id };
+}
+
+// Réécrit entièrement la série (mêmes styles/thème) tant que le scénario n'est pas validé.
+export async function regenerateScript(project, update) {
+  update('Nouvelle écriture du scénario par Claude (1 à 3 minutes)…');
+  const data = await askClaudeForJson(buildSeriesPrompt(project.styles, project.theme));
+  project.title = data.title || project.title;
+  project.logline = data.logline || '';
+  project.setting = data.setting || '';
+  project.characters = assignVoices(
+    (data.characters || []).map((c, i) => ({
+      id: c.id || `perso${i + 1}`,
+      name: c.name || `Personnage ${i + 1}`,
+      gender: c.gender || 'homme',
+      age: c.age || 30,
+      role: c.role || '',
+      visual: c.visual || '',
+      color: SPEAKER_COLORS[i % SPEAKER_COLORS.length],
+    })),
+  );
+  project.episodeSummaries = (data.episodeSummaries || []).map((s, i) => ({
+    number: s.number || i + 1,
+    title: s.title || `Épisode ${i + 1}`,
+    summary: s.summary || '',
+  }));
+  const ep1raw = data.episode1 || (Array.isArray(data.episodes) ? data.episodes[0] : null);
+  if (!ep1raw) {
+    throw new Error("Claude n'a pas fourni l'épisode 1.");
+  }
+  project.episodes = [normalizeEpisode(ep1raw, 1)];
+  project.stage = 'script_review';
+  saveProject(project);
 }
 
 export async function produceEpisode(project, number, update) {
@@ -294,17 +328,41 @@ export async function regenerateSceneAudio(project, episode, scene, update) {
   for (let j = 0; j < scene.lines.length; j++) {
     const line = scene.lines[j];
     update(`Voix ${j + 1}/${scene.lines.length}…`);
-    const file = `e${episode.number}_${scene.id}_l${j}_v${scene.version}.mp3`;
-    line.audioDurationSec = await synthesize(
-      line.text,
-      voiceFor(project, line.speaker),
-      path.join(assetsDir(project.id), file),
-    );
-    line.audio = file;
+    const base = `e${episode.number}_${scene.id}_l${j}_v${scene.version}`;
+    const { file, durationSec } = await synthesize({
+      text: line.text,
+      ...voiceFor(project, line.speaker),
+      outBase: path.join(assetsDir(project.id), base),
+    });
+    line.audio = path.basename(file);
+    line.audioDurationSec = durationSec;
     delete line.audioError;
   }
   recomputeSceneDuration(scene);
   saveProject(project);
+}
+
+// Refait toutes les voix de l'épisode (après un changement de méthode ou des échecs).
+export async function regenerateAllAudio(project, episode, update) {
+  const scenes = episode.scenes || [];
+  const failures = [];
+  for (let i = 0; i < scenes.length; i++) {
+    update(`Voix scène ${i + 1}/${scenes.length}…`, i / scenes.length);
+    try {
+      await regenerateSceneAudio(project, episode, scenes[i], () => {});
+    } catch (e) {
+      scenes[i].lines.forEach((l) => {
+        if (!l.audio) {
+          l.audioError = e.message;
+        }
+      });
+      failures.push(`scène ${i + 1}`);
+      saveProject(project);
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(`Voix en échec : ${failures.join(', ')}. Les autres ont été régénérées.`);
+  }
 }
 
 export function saveUploadedImage(project, episode, scene, base64Data) {
