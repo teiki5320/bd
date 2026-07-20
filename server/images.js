@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { IMAGE_PROVIDER } from './config.js';
+import { openartGenerate } from './openart.js';
 
 // Format vertical 9:16 — dimensions raisonnables pour la génération.
 const IMG_WIDTH = 768;
@@ -72,14 +73,24 @@ async function fal(prompt) {
   return Buffer.from(await imgRes.arrayBuffer());
 }
 
-// Génère une image et l'écrit dans outPath. Retourne true, ou false en mode manuel.
-export async function generateImage(prompt, outPath, { seed = Math.floor(Math.random() * 1e9) } = {}) {
+// Génère une image et l'écrit dans outPath.
+// Retourne { ok, url } — url est renseignée par OpenArt (référence de visage), false/ok=false en mode manuel.
+export async function generateImage(
+  prompt,
+  outPath,
+  { seed = Math.floor(Math.random() * 1e9), referenceUrls = [] } = {},
+) {
   if (IMAGE_PROVIDER === 'manual') {
-    return false;
+    return { ok: false, url: null };
+  }
+  if (IMAGE_PROVIDER === 'openart') {
+    const { buffer, url } = await openartGenerate({ prompt, referenceUrls });
+    fs.writeFileSync(outPath, buffer);
+    return { ok: true, url };
   }
   const buf = await fetchWithRetry(() =>
     IMAGE_PROVIDER === 'fal' ? fal(prompt) : pollinations(prompt, seed),
   );
   fs.writeFileSync(outPath, buf);
-  return true;
+  return { ok: true, url: null };
 }

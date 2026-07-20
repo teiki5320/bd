@@ -321,6 +321,26 @@ export function ProjectView({ projectId, onBack }) {
           </div>
 
           <div className="scenes-column">
+            <div className="char-strip">
+              {project.characters.map((c) => (
+                <div key={c.id} className="char-chip" title={`${c.role} — ${c.visual}`}>
+                  {c.portrait ? (
+                    <img src={`/files/${project.id}/${c.portrait}`} alt={c.name} />
+                  ) : (
+                    <div className="char-ph">👤</div>
+                  )}
+                  <span style={{ color: c.color }}>{c.name}</span>
+                  <button
+                    className="btn-small"
+                    disabled={busy}
+                    title="Régénérer le portrait de référence (visages constants, OpenArt)"
+                    onClick={() => runJob(() => api.regenPortrait(projectId, c.id))}
+                  >
+                    🔄
+                  </button>
+                </div>
+              ))}
+            </div>
             <h2>
               Épisode {episode.number} — {episode.title}
             </h2>

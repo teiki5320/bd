@@ -443,6 +443,46 @@ code {
   color: var(--gold);
 }
 
+.char-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.char-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  padding: 6px 12px 6px 6px;
+  font-size: 0.88rem;
+}
+
+.char-chip img,
+.char-chip .char-ph {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.char-chip .char-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-2);
+  font-size: 1.2rem;
+}
+
+.char-chip .btn-small {
+  padding: 4px 8px;
+  border-radius: 50%;
+}
+
 .cliffhanger {
   color: var(--muted);
   font-style: italic;

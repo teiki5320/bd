@@ -50,13 +50,24 @@ Copie `.env.example` vers `.env` pour configurer :
 
 | `IMAGE_PROVIDER` | Description |
 |---|---|
+| `openart` | **Recommandé.** Ton compte OpenArt via son MCP officiel : meilleurs modèles (Seedream, Nano Banana…) et **visages constants** — l'app crée d'abord un portrait de référence par personnage, puis le réutilise dans chaque scène. Consomme tes crédits OpenArt. |
 | `pollinations` *(défaut)* | Gratuit, sans compte. Qualité correcte, idéal pour itérer. |
-| `fal` | fal.ai (modèle FLUX) — meilleure qualité, nécessite `FAL_KEY` (payant au volume). |
-| `manual` | Aucune génération automatique : copie le prompt de chaque scène dans **OpenArt** (openart.ai), puis importe l'image dans la scène. |
+| `fal` | fal.ai (modèle FLUX dev) — très bonne qualité, nécessite `FAL_KEY` (payant au volume). |
+| `manual` | Aucune génération automatique : copie le prompt de chaque scène dans OpenArt, puis importe l'image dans la scène. |
 
-> **Pourquoi pas l'API OpenArt ?** OpenArt n'offre pas d'API publique à ce jour — son centre
-> d'aide le confirme. Le mode `manual` permet quand même d'utiliser ton compte OpenArt,
-> et le bouton « Copier le prompt » est là pour ça.
+### Activer OpenArt (visages constants)
+
+```bash
+# 1. Enregistrer le MCP officiel d'OpenArt dans Claude Code (une fois)
+claude mcp add --transport http --scope user openart https://mcp.openart.ai/mcp
+# 2. L'authentifier : lance `claude`, tape /mcp, choisis openart → Authenticate
+# 3. Dans .env :
+#    IMAGE_PROVIDER=openart
+```
+
+Au premier épisode, l'app génère un **portrait de référence** par personnage (visibles en haut
+du projet, avec un bouton 🔄 pour les refaire), puis chaque scène est générée en passant ces
+portraits comme références de visage.
 
 ## Notes techniques
 
