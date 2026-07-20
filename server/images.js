@@ -25,7 +25,7 @@ async function fetchWithRetry(doFetch, { attempts = 3 } = {}) {
 async function pollinations(prompt, seed) {
   const url =
     `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
-    `?width=${IMG_WIDTH}&height=${IMG_HEIGHT}&nologo=true&model=flux&seed=${seed}`;
+    `?width=${IMG_WIDTH}&height=${IMG_HEIGHT}&nologo=true&model=flux&enhance=true&seed=${seed}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(180000) });
   if (!res.ok) {
     throw new Error(`Pollinations a répondu ${res.status}`);
@@ -42,7 +42,9 @@ async function fal(prompt) {
   if (!key) {
     throw new Error('IMAGE_PROVIDER=fal mais FAL_KEY est vide dans .env');
   }
-  const res = await fetch('https://fal.run/fal-ai/flux/schnell', {
+  // flux/dev par défaut (photoréalisme nettement supérieur à schnell).
+  const model = process.env.FAL_MODEL || 'fal-ai/flux/dev';
+  const res = await fetch(`https://fal.run/${model}`, {
     method: 'POST',
     headers: {
       Authorization: `Key ${key}`,

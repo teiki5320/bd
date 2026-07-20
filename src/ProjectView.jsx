@@ -284,6 +284,17 @@ export function ProjectView({ projectId, onBack }) {
               >
                 ✅ Valider et produire le MP4
               </button>
+              <button
+                className="btn-ghost"
+                disabled={busy}
+                onClick={() => {
+                  if (confirm('Régénérer toutes les images de cet épisode avec le fournisseur actuel ?')) {
+                    runJob(() => api.regenAllImages(projectId, epNumber));
+                  }
+                }}
+              >
+                🖼️ Régénérer toutes les images
+              </button>
               {episode.renderedFile && (
                 <a
                   className="btn-ghost"
