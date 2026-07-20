@@ -18,7 +18,10 @@ import { startJob, getJob } from './jobs.js';
 import {
   createProject,
   produceEpisode,
+  regenerateScript,
+  ensureCharacterPortraits,
   regenerateAllImages,
+  regenerateAllAudio,
   regenerateSceneImage,
   regenerateSceneAudio,
   regenerateCharacterPortrait,
@@ -86,6 +89,75 @@ app.post('/api/projects/:id/music', (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// ---------- Parcours par étapes : scénario → personnages → production ----------
+app.post('/api/projects/:id/regen-script', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  const job = startJob('Nouveau scénario', (update) => regenerateScript(p, update));
+  res.json({ jobId: job.id });
+});
+
+app.post('/api/projects/:id/validate-script', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  if (currentProvider() === 'openart') {
+    p.stage = 'characters_review';
+    saveProject(p);
+    const job = startJob('Portraits des personnages', (update) =>
+      ensureCharacterPortraits(p, update),
+    );
+    res.json({ stage: p.stage, jobId: job.id });
+  } else {
+    p.stage = 'production';
+    saveProject(p);
+    const job = startJob('Production épisode 1', (update) => produceEpisode(p, 1, update));
+    res.json({ stage: p.stage, jobId: job.id });
+  }
+});
+
+app.post('/api/projects/:id/portraits', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  const job = startJob('Portraits des personnages', (update) =>
+    ensureCharacterPortraits(p, update),
+  );
+  res.json({ jobId: job.id });
+});
+
+app.post('/api/projects/:id/validate-characters', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  p.stage = 'production';
+  saveProject(p);
+  const job = startJob('Production épisode 1', (update) => produceEpisode(p, 1, update));
+  res.json({ stage: p.stage, jobId: job.id });
+});
+
+app.post('/api/projects/:id/episodes/:n/regen-audio', (req, res) => {
+  withEpisode(req, res, (p, ep) => {
+    if (!ep) {
+      res.status(404).json({ error: 'Épisode introuvable' });
+      return;
+    }
+    const job = startJob(`Voix épisode ${ep.number}`, (update) =>
+      regenerateAllAudio(p, ep, update),
+    );
+    res.json({ jobId: job.id });
+  });
 });
 
 app.post('/api/projects/:id/characters/:charId/portrait', (req, res) => {

@@ -25,6 +25,13 @@ export const api = {
     request(`/api/projects/${id}/episodes/${n}/regen-images`, { method: 'POST' }),
   regenPortrait: (id, charId) =>
     request(`/api/projects/${id}/characters/${charId}/portrait`, { method: 'POST' }),
+  regenScript: (id) => request(`/api/projects/${id}/regen-script`, { method: 'POST' }),
+  validateScript: (id) => request(`/api/projects/${id}/validate-script`, { method: 'POST' }),
+  generatePortraits: (id) => request(`/api/projects/${id}/portraits`, { method: 'POST' }),
+  validateCharacters: (id) =>
+    request(`/api/projects/${id}/validate-characters`, { method: 'POST' }),
+  regenAllAudio: (id, n) =>
+    request(`/api/projects/${id}/episodes/${n}/regen-audio`, { method: 'POST' }),
   patchScene: (id, n, sceneId, patch) =>
     request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}`, {
       method: 'PATCH',

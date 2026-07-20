@@ -11,6 +11,121 @@ const STATUS_LABELS = {
   done: '✅ validé',
 };
 
+// ---------- Étape 1 : validation du scénario ----------
+function ScriptReview({ project, busy, onRegen, onValidate }) {
+  const ep1 = project.episodes[0];
+  return (
+    <div className="review-panel">
+      <div className="review-step">Étape 1 / 3 — Le scénario</div>
+      <h2>{project.title}</h2>
+      <p className="logline">{project.logline}</p>
+      <p className="review-setting">📍 {project.setting}</p>
+
+      <h3>Personnages</h3>
+      <ul className="review-list">
+        {project.characters.map((c) => (
+          <li key={c.id}>
+            <strong style={{ color: c.color }}>{c.name}</strong> — {c.role} ({c.gender},{' '}
+            {c.age} ans)
+          </li>
+        ))}
+      </ul>
+
+      <h3>La saison en 10 épisodes</h3>
+      <ol className="review-list">
+        {project.episodeSummaries.map((s) => (
+          <li key={s.number}>
+            <strong>{s.title}</strong> — {s.summary}
+          </li>
+        ))}
+      </ol>
+
+      {ep1 && (
+        <>
+          <h3>Épisode 1 — {ep1.title} (script complet)</h3>
+          <div className="review-script">
+            {ep1.scenes.map((sc, i) => (
+              <div key={sc.id} className="review-scene">
+                <div className="review-scene-num">Scène {i + 1}</div>
+                {sc.lines.map((l, j) => {
+                  const c = project.characters.find((x) => x.id === l.speaker);
+                  return (
+                    <p key={j}>
+                      <strong style={{ color: c ? c.color : '#9c8a5a' }}>
+                        {c ? c.name : 'Narrateur'} :
+                      </strong>{' '}
+                      {l.text}
+                    </p>
+                  );
+                })}
+              </div>
+            ))}
+            {ep1.cliffhanger && <p className="cliffhanger">🔥 Cliffhanger : « {ep1.cliffhanger} »</p>}
+          </div>
+        </>
+      )}
+
+      <div className="review-actions">
+        <button className="btn-ghost" disabled={busy} onClick={onRegen}>
+          🔄 Régénérer le scénario
+        </button>
+        <button className="btn-primary" disabled={busy} onClick={onValidate}>
+          ✅ Valider le scénario
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Étape 2 : validation des personnages ----------
+function CharactersReview({ project, busy, runJob, onValidate, projectId }) {
+  const missing = project.characters.filter((c) => !c.portrait).length;
+  return (
+    <div className="review-panel">
+      <div className="review-step">Étape 2 / 3 — Les personnages</div>
+      <h2>Les visages de « {project.title} »</h2>
+      <p className="logline">
+        Ces portraits servent de référence : chaque scène sera générée avec ces visages.
+        Régénère ceux qui ne te plaisent pas avant de valider.
+      </p>
+      <div className="char-grid">
+        {project.characters.map((c) => (
+          <div key={c.id} className="char-card">
+            {c.portrait ? (
+              <img src={`/files/${project.id}/${c.portrait}?v=${c.portraitVersion || 0}`} alt={c.name} />
+            ) : (
+              <div className="char-card-ph">👤</div>
+            )}
+            <strong style={{ color: c.color }}>{c.name}</strong>
+            <span className="char-role">{c.role}</span>
+            <button
+              className="btn-small"
+              disabled={busy}
+              onClick={() => runJob(() => api.regenPortrait(projectId, c.id))}
+            >
+              🔄 Régénérer
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="review-actions">
+        {missing > 0 && (
+          <button
+            className="btn-ghost"
+            disabled={busy}
+            onClick={() => runJob(() => api.generatePortraits(projectId))}
+          >
+            🎨 Générer les portraits manquants ({missing})
+          </button>
+        )}
+        <button className="btn-primary" disabled={busy || missing > 0} onClick={onValidate}>
+          ✅ Valider les personnages et produire l'épisode 1
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SceneCard({ project, episode, scene, index, busy, runJob, onRefresh }) {
   const [lines, setLines] = useState(scene.lines);
   const [prompt, setPrompt] = useState(scene.imagePrompt);
@@ -128,6 +243,9 @@ function SceneCard({ project, episode, scene, index, busy, runJob, onRefresh }) 
         </button>
       </div>
       {scene.imageError && <p className="error small">Image : {scene.imageError}</p>}
+      {scene.lines.some((l) => l.audioError) && (
+        <p className="error small">Voix : {scene.lines.find((l) => l.audioError).audioError}</p>
+      )}
     </div>
   );
 }
@@ -203,27 +321,76 @@ export function ProjectView({ projectId, onBack }) {
   const producedNumbers = project.episodes.map((e) => e.number);
   const nextNumber = producedNumbers.length < EPISODE_COUNT ? Math.max(...producedNumbers) + 1 : null;
   const currentDone = episode?.status === 'done';
+  const stage = project.stage || 'production';
+
+  const header = (
+    <header className="project-header">
+      <button className="btn-ghost" onClick={onBack}>
+        ← Mes dramas
+      </button>
+      <div className="project-title">
+        <h1>{project.title}</h1>
+        <p className="logline">{project.logline}</p>
+      </div>
+      <label className="btn-ghost upload" title="Musique de fond de tous les épisodes (MP3)">
+        {project.musicFile ? '🎵 Changer la musique' : '🎵 Ajouter une musique'}
+        <input
+          type="file"
+          accept="audio/mpeg,audio/wav,audio/mp4,audio/x-m4a"
+          hidden
+          onChange={(e) => e.target.files[0] && uploadMusic(e.target.files[0])}
+        />
+      </label>
+    </header>
+  );
+
+  const jobBanner = (
+    <>
+      {busy && (
+        <div className="banner info job-banner">
+          <div className="spinner small" />
+          {job?.step || 'Traitement…'}
+          {job?.progress != null && ` (${Math.round(job.progress * 100)} %)`}
+        </div>
+      )}
+      {error && <div className="banner warn">{error}</div>}
+    </>
+  );
+
+  if (stage === 'script_review') {
+    return (
+      <div className="page project">
+        {header}
+        {jobBanner}
+        <ScriptReview
+          project={project}
+          busy={busy}
+          onRegen={() => runJob(() => api.regenScript(projectId))}
+          onValidate={() => runJob(() => api.validateScript(projectId))}
+        />
+      </div>
+    );
+  }
+
+  if (stage === 'characters_review') {
+    return (
+      <div className="page project">
+        {header}
+        {jobBanner}
+        <CharactersReview
+          project={project}
+          projectId={projectId}
+          busy={busy}
+          runJob={runJob}
+          onValidate={() => runJob(() => api.validateCharacters(projectId)).then((ok) => ok && setEpNumber(1))}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="page project">
-      <header className="project-header">
-        <button className="btn-ghost" onClick={onBack}>
-          ← Mes dramas
-        </button>
-        <div className="project-title">
-          <h1>{project.title}</h1>
-          <p className="logline">{project.logline}</p>
-        </div>
-        <label className="btn-ghost upload" title="Musique de fond de tous les épisodes (MP3)">
-          {project.musicFile ? '🎵 Changer la musique' : '🎵 Ajouter une musique'}
-          <input
-            type="file"
-            accept="audio/mpeg,audio/wav,audio/mp4,audio/x-m4a"
-            hidden
-            onChange={(e) => e.target.files[0] && uploadMusic(e.target.files[0])}
-          />
-        </label>
-      </header>
+      {header}
 
       <nav className="episode-tabs">
         {Array.from({ length: EPISODE_COUNT }, (_, i) => i + 1).map((n) => {
@@ -244,14 +411,7 @@ export function ProjectView({ projectId, onBack }) {
         })}
       </nav>
 
-      {busy && (
-        <div className="banner info job-banner">
-          <div className="spinner small" />
-          {job?.step || 'Traitement…'}
-          {job?.progress != null && ` (${Math.round(job.progress * 100)} %)`}
-        </div>
-      )}
-      {error && <div className="banner warn">{error}</div>}
+      {jobBanner}
 
       {episode ? (
         <div className="workspace">
@@ -294,6 +454,17 @@ export function ProjectView({ projectId, onBack }) {
                 }}
               >
                 🖼️ Régénérer toutes les images
+              </button>
+              <button
+                className="btn-ghost"
+                disabled={busy}
+                onClick={() => {
+                  if (confirm('Régénérer toutes les voix de cet épisode ?')) {
+                    runJob(() => api.regenAllAudio(projectId, epNumber));
+                  }
+                }}
+              >
+                🔊 Générer toutes les voix
               </button>
               {episode.renderedFile && (
                 <a

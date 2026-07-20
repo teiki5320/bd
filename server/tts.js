@@ -1,9 +1,22 @@
 import fs from 'node:fs';
+import { execFile } from 'node:child_process';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { parseFile } from 'music-metadata';
 
-const SYNTH_TIMEOUT_MS = 60_000;
+const SYNTH_TIMEOUT_MS = 25_000;
+
+function execFileP(cmd, args) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { timeout: 60000 }, (err, stdout, stderr) => {
+      if (err) {
+        reject(new Error(`${cmd} : ${String(stderr || err.message).slice(0, 200)}`));
+      } else {
+        resolve(stdout);
+      }
+    });
+  });
+}
 
 // Derrière un proxy d'entreprise, le WebSocket d'Edge TTS doit passer par l'agent.
 function proxyAgent() {
@@ -29,6 +42,11 @@ const FEMALE_VOICES = [
   'fr-FR-JacquelineNeural',
 ];
 
+// Voix macOS (`say`) — plan B local quand Edge TTS est inaccessible.
+const SAY_MALE = ['Thomas', 'Nicolas'];
+const SAY_FEMALE = ['Amélie', 'Audrey', 'Aurélie', 'Chantal'];
+const NARRATOR_SAY = 'Thomas';
+
 // Attribue une voix distincte à chaque personnage selon son genre.
 export function assignVoices(characters) {
   let m = 0;
@@ -36,9 +54,11 @@ export function assignVoices(characters) {
   for (const c of characters) {
     if ((c.gender || '').toLowerCase().startsWith('f')) {
       c.voice = FEMALE_VOICES[f % FEMALE_VOICES.length];
+      c.sayVoice = SAY_FEMALE[f % SAY_FEMALE.length];
       f++;
     } else {
       c.voice = MALE_VOICES[m % MALE_VOICES.length];
+      c.sayVoice = SAY_MALE[m % SAY_MALE.length];
       m++;
     }
   }
@@ -59,8 +79,8 @@ function normalizeError(e) {
   return new Error(`Synthèse vocale impossible : ${text}`);
 }
 
-// Synthétise une réplique en MP3. Retourne la durée en secondes.
-export async function synthesize(text, voice, outPath) {
+// Synthèse via Edge TTS (en ligne, gratuit) — écrit un MP3.
+async function synthesizeEdge(text, voice, outPath) {
   const tts = new MsEdgeTTS(proxyAgent());
   try {
     await Promise.race([
@@ -72,7 +92,7 @@ export async function synthesize(text, voice, outPath) {
       }),
       new Promise((_, reject) =>
         setTimeout(
-          () => reject(new Error('Synthèse vocale trop longue (réseau bloqué ?).')),
+          () => reject(new Error('Edge TTS trop long (service inaccessible ?).')),
           SYNTH_TIMEOUT_MS,
         ),
       ),
@@ -85,15 +105,80 @@ export async function synthesize(text, voice, outPath) {
     }
   }
   if (!fs.existsSync(outPath) || fs.statSync(outPath).size < 500) {
-    throw new Error('La synthèse vocale a produit un fichier vide.');
+    throw new Error('Edge TTS a produit un fichier vide.');
   }
   return audioDurationSec(outPath);
 }
 
+// Synthèse via la voix intégrée de macOS (`say`) — 100 % locale, écrit un M4A.
+async function synthesizeSay(text, sayVoice, outBase) {
+  const aiff = `${outBase}.aiff`;
+  const m4a = `${outBase}.m4a`;
+  try {
+    if (sayVoice) {
+      try {
+        await execFileP('say', ['-v', sayVoice, '-o', aiff, text]);
+      } catch {
+        // voix non installée sur ce Mac → voix française par défaut
+        await execFileP('say', ['-o', aiff, text]);
+      }
+    } else {
+      await execFileP('say', ['-o', aiff, text]);
+    }
+    await execFileP('afconvert', ['-f', 'm4af', '-d', 'aac', aiff, m4a]);
+  } finally {
+    fs.rmSync(aiff, { force: true });
+  }
+  if (!fs.existsSync(m4a) || fs.statSync(m4a).size < 500) {
+    throw new Error('La voix macOS a produit un fichier vide.');
+  }
+  return m4a;
+}
+
+// Après un échec Edge, on bascule sur les voix macOS pendant 10 min
+// (évite d'attendre le timeout à chaque réplique quand le service est HS).
+let edgeFailedAt = 0;
+const EDGE_RETRY_AFTER_MS = 10 * 60 * 1000;
+
+// Synthétise une réplique : Edge TTS d'abord, voix macOS en secours.
+// TTS_PROVIDER=say ou =edge dans .env pour forcer l'un des deux.
+// Retourne { file (chemin complet), durationSec }.
+export async function synthesize({ text, edgeVoice, sayVoice, outBase }) {
+  const pref = (process.env.TTS_PROVIDER || 'auto').toLowerCase();
+  const canSay = process.platform === 'darwin';
+  const skipEdge =
+    pref === 'say' ||
+    (pref === 'auto' && canSay && Date.now() - edgeFailedAt < EDGE_RETRY_AFTER_MS);
+  if (!skipEdge) {
+    try {
+      const mp3 = `${outBase}.mp3`;
+      const durationSec = await synthesizeEdge(text, edgeVoice, mp3);
+      return { file: mp3, durationSec };
+    } catch (edgeErr) {
+      edgeFailedAt = Date.now();
+      if (!canSay || pref === 'edge') {
+        throw edgeErr;
+      }
+    }
+  }
+  if (!canSay) {
+    throw new Error('Aucune méthode de synthèse vocale disponible sur cette machine.');
+  }
+  const m4a = await synthesizeSay(text, sayVoice, outBase);
+  return { file: m4a, durationSec: await audioDurationSec(m4a) };
+}
+
 export function voiceFor(project, speaker) {
   if (speaker === 'narrator') {
-    return NARRATOR_VOICE;
+    return { edgeVoice: NARRATOR_VOICE, sayVoice: NARRATOR_SAY };
   }
   const c = (project.characters || []).find((x) => x.id === speaker);
-  return (c && c.voice) || NARRATOR_VOICE;
+  if (!c) {
+    return { edgeVoice: NARRATOR_VOICE, sayVoice: NARRATOR_SAY };
+  }
+  const female = (c.gender || '').toLowerCase().startsWith('f');
+  return {
+    edgeVoice: c.voice || (female ? FEMALE_VOICES[0] : MALE_VOICES[0]),
+    sayVoice: c.sayVoice || (female ? SAY_FEMALE[0] : SAY_MALE[0]),
+  };
 }
