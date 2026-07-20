@@ -175,6 +175,32 @@ export async function produceEpisode(project, number, update) {
   return { number };
 }
 
+export async function regenerateAllImages(project, episode, update) {
+  const dir = assetsDir(project.id);
+  const scenes = episode.scenes || [];
+  const failures = [];
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    update(`Image ${i + 1}/${scenes.length}…`, i / scenes.length);
+    scene.version += 1;
+    const file = `e${episode.number}_${scene.id}_v${scene.version}.jpg`;
+    try {
+      const ok = await generateImage(scene.imagePrompt, path.join(dir, file));
+      if (ok) {
+        scene.image = file;
+        delete scene.imageError;
+      }
+    } catch (e) {
+      scene.imageError = e.message;
+      failures.push(`scène ${i + 1}`);
+    }
+    saveProject(project);
+  }
+  if (failures.length > 0) {
+    throw new Error(`Images en échec : ${failures.join(', ')}. Les autres ont été régénérées.`);
+  }
+}
+
 export async function regenerateSceneImage(project, episode, scene, update) {
   update('Génération de la nouvelle image…');
   scene.version += 1;

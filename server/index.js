@@ -18,6 +18,7 @@ import { startJob, getJob } from './jobs.js';
 import {
   createProject,
   produceEpisode,
+  regenerateAllImages,
   regenerateSceneImage,
   regenerateSceneAudio,
   saveUploadedImage,
@@ -110,6 +111,19 @@ app.post('/api/projects/:id/episodes/:n/produce', (req, res) => {
   }
   const job = startJob(`Production épisode ${n}`, (update) => produceEpisode(p, n, update));
   res.json({ jobId: job.id });
+});
+
+app.post('/api/projects/:id/episodes/:n/regen-images', (req, res) => {
+  withEpisode(req, res, (p, ep) => {
+    if (!ep) {
+      res.status(404).json({ error: 'Épisode introuvable' });
+      return;
+    }
+    const job = startJob(`Images épisode ${ep.number}`, (update) =>
+      regenerateAllImages(p, ep, update),
+    );
+    res.json({ jobId: job.id });
+  });
 });
 
 app.post('/api/projects/:id/episodes/:n/render', (req, res) => {
