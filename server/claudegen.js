@@ -81,6 +81,7 @@ export function extractJson(text) {
 
 const SCENE_SCHEMA = `{
   "lines": [1 à 2 répliques : {"speaker": "narrator" OU l'id d'un personnage, "text": "réplique courte et percutante en français, 18 mots maximum"}],
+  "characters": [ids des personnages VISIBLES à l'image dans cette scène, [] si aucun],
   "imagePrompt": "EN ANGLAIS : le plan cinématographique précis (lieu, action, émotion, cadrage) en répétant mot pour mot la description visuelle 'visual' de chaque personnage présent, terminé par : cinematic film still, african drama series, warm natural light, shallow depth of field, 9:16 vertical"
 }`;
 

@@ -23,6 +23,8 @@ export const api = {
     request(`/api/projects/${id}/episodes/${n}/render`, { method: 'POST' }),
   regenAllImages: (id, n) =>
     request(`/api/projects/${id}/episodes/${n}/regen-images`, { method: 'POST' }),
+  regenPortrait: (id, charId) =>
+    request(`/api/projects/${id}/characters/${charId}/portrait`, { method: 'POST' }),
   patchScene: (id, n, sceneId, patch) =>
     request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}`, {
       method: 'PATCH',

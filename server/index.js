@@ -21,6 +21,7 @@ import {
   regenerateAllImages,
   regenerateSceneImage,
   regenerateSceneAudio,
+  regenerateCharacterPortrait,
   saveUploadedImage,
   saveUploadedMusic,
 } from './pipeline.js';
@@ -85,6 +86,18 @@ app.post('/api/projects/:id/music', (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+app.post('/api/projects/:id/characters/:charId/portrait', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  const job = startJob('Portrait de référence', (update) =>
+    regenerateCharacterPortrait(p, req.params.charId, update),
+  );
+  res.json({ jobId: job.id });
 });
 
 // ---------- Épisodes ----------
