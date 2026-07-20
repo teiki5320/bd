@@ -95,6 +95,17 @@ code {
   color: #a8d5f0;
 }
 
+.provider-line {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+
+.provider-line strong {
+  color: var(--gold-dim);
+}
+
 .create-card {
   background: var(--panel);
   border: 1px solid var(--border);

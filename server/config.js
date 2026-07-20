@@ -5,12 +5,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const ROOT = path.resolve(__dirname, '..');
-export const PROJECTS_DIR = path.join(ROOT, 'projects');
-export const DIST_DIR = path.join(ROOT, 'dist');
-export const PORT = Number(process.env.PORT || 4600);
-export const IMAGE_PROVIDER = (process.env.IMAGE_PROVIDER || 'pollinations').toLowerCase();
 
-// Charge un éventuel fichier .env (simple, sans dépendance)
+// Charge le fichier .env AVANT de lire la configuration (sans dépendance).
 const envFile = path.join(ROOT, '.env');
 if (fs.existsSync(envFile)) {
   for (const line of fs.readFileSync(envFile, 'utf8').split('\n')) {
@@ -20,5 +16,10 @@ if (fs.existsSync(envFile)) {
     }
   }
 }
+
+export const PROJECTS_DIR = path.join(ROOT, 'projects');
+export const DIST_DIR = path.join(ROOT, 'dist');
+export const PORT = Number(process.env.PORT || 4600);
+export const IMAGE_PROVIDER = (process.env.IMAGE_PROVIDER || 'pollinations').toLowerCase();
 
 fs.mkdirSync(PROJECTS_DIR, { recursive: true });

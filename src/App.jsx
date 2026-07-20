@@ -116,6 +116,12 @@ export function App() {
           prompt dans OpenArt puis dépose l'image dans la scène.
         </div>
       )}
+      {health && (
+        <p className="provider-line">
+          Images : <strong>{health.imageProvider}</strong>
+          {health.imageProvider === 'openart' && ' (visages constants activés)'}
+        </p>
+      )}
 
       <section className="create-card">
         <h2>Nouveau drama</h2>
