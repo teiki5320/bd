@@ -120,6 +120,7 @@ export function App() {
         <p className="provider-line">
           Images : <strong>{health.imageProvider}</strong>
           {health.imageProvider === 'openart' && ' (visages constants activés)'}
+          {' · '}Voix : <strong>{health.tts}</strong>
         </p>
       )}
 

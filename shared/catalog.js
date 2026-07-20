@@ -13,6 +13,14 @@ export const STYLES = [
   { id: 'secrets', emoji: '🤫', label: 'Secrets' },
   { id: 'village', emoji: '🏙️', label: 'Village vs Ville' },
   { id: 'jalousie', emoji: '😤', label: 'Jalousie' },
+  { id: 'polygamie', emoji: '👩‍❤️‍👨', label: 'Co-épouses' },
+  { id: 'paternite', emoji: '🤰', label: 'Paternité cachée' },
+  { id: 'foi', emoji: '🙏', label: 'Foi & miracles' },
+  { id: 'tradition', emoji: '👵', label: 'Tradition vs modernité' },
+  { id: 'diaspora', emoji: '✈️', label: 'Diaspora' },
+  { id: 'richesse', emoji: '🚗', label: 'Nouveaux riches' },
+  { id: 'celebrite', emoji: '🎤', label: 'Célébrité & réseaux' },
+  { id: 'dette', emoji: '💸', label: 'Dettes & tontine' },
 ];
 
 export const MAX_STYLES = 3;

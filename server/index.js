@@ -30,6 +30,7 @@ import {
 } from './pipeline.js';
 import { renderEpisode } from './render.js';
 import { currentProvider } from './images.js';
+import { ttsInfo } from './tts.js';
 
 const app = express();
 app.use(express.json({ limit: '60mb' }));
@@ -41,6 +42,7 @@ app.get('/api/health', (req, res) => {
       ok: true,
       claude: err ? null : String(stdout).trim(),
       imageProvider: currentProvider(),
+      tts: ttsInfo(),
       episodeCount: EPISODE_COUNT,
     });
   });
