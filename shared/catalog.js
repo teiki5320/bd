@@ -37,7 +37,6 @@ export const VOICES = [
   { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George', gender: 'homme', desc: 'rocailleux, âgé, 55-75 ans — ancien, sage du village' },
   { id: 'TX3LPaxmHKxFdv7VOQHJ', name: 'Liam', gender: 'homme', desc: 'jeune adulte posé, 25-35 ans — sérieux, réfléchi' },
   { id: 'pqHfZKP75CvOlQylNhV4', name: 'Bill', gender: 'homme', desc: 'voix âgée et douce, 60 ans et plus — grand-père' },
-  { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', gender: 'femme', desc: 'douce, 25-40 ans — héroïne sensible' },
   { id: 'FGY2WhTYpPnrIDTdsKH5', name: 'Laura', gender: 'femme', desc: 'vive et pétillante, 20-35 ans — jeune femme moderne' },
   { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily', gender: 'femme', desc: 'posée et claire, 30-45 ans — femme de tête' },
   { id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda', gender: 'femme', desc: 'mûre et chaleureuse, 45-65 ans — matriarche, tante' },
@@ -45,6 +44,7 @@ export const VOICES = [
 ];
 // Retirées : Charlotte (XB0fDUnXU5powFXDhCwa) et Rachel (21m00Tcm4TlvDq8ikWAM) —
 // voix « library » refusées par l'API ElevenLabs sur les plans gratuits (HTTP 402).
+// Sarah (EXAVITQu4vr4xnSDxMaL) — écartée à l'écoute (accent non français).
 
 export function voiceById(id) {
   return VOICES.find((v) => v.id === id) || null;
