@@ -343,6 +343,9 @@ export function ProjectView({ projectId, onBack }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [playerKey, setPlayerKey] = useState(0);
+  const [credits, setCredits] = useState(null);
+
+  const loadCredits = () => api.credits().then(setCredits).catch(() => {});
 
   const refresh = () =>
     api.getProject(projectId).then((p) => {
@@ -353,6 +356,7 @@ export function ProjectView({ projectId, onBack }) {
 
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
+    loadCredits();
   }, [projectId]);
 
   const episode = useMemo(
@@ -372,6 +376,7 @@ export function ProjectView({ projectId, onBack }) {
       const { jobId } = await kickoff();
       await followJob(jobId, setJob);
       await refresh();
+      loadCredits();
       return true;
     } catch (e) {
       setError(e.message);
@@ -454,22 +459,64 @@ export function ProjectView({ projectId, onBack }) {
   );
 
   const u = project.usage || {};
-  const usageParts = [];
-  if (u.openartImages) usageParts.push(`🎨 ${u.openartImages} images OpenArt (tes crédits)`);
-  if (u.falImages) usageParts.push(`🖼️ ${u.falImages} images fal.ai`);
-  if (u.pollinationsImages) usageParts.push(`🖼️ ${u.pollinationsImages} images Pollinations (gratuit)`);
-  if (u.elevenChars)
-    usageParts.push(
-      `🎙️ ${u.elevenChars.toLocaleString('fr-FR')} crédits ElevenLabs (${u.elevenClips} répliques)`,
-    );
-  if (u.edgeClips) usageParts.push(`🔊 ${u.edgeClips} répliques Edge (gratuit)`);
-  if (u.sayClips) usageParts.push(`🗣️ ${u.sayClips} répliques voix macOS (gratuit)`);
-  if (u.claudeCalls) usageParts.push(`🤖 ${u.claudeCalls} générations Claude (abonnement)`);
+  const fr = (n) => Number(n || 0).toLocaleString('fr-FR');
+  const usageRows = [];
+
+  // Images
+  {
+    const el = credits?.openart;
+    let balance = '';
+    if (el && el.credits != null) {
+      balance = ` · solde du compte : ${fr(el.credits)} crédits restants`;
+    } else if (el && el.error) {
+      balance = ` · solde indisponible (${el.error})`;
+    }
+    if (u.openartImages || balance) {
+      usageRows.push(`🎨 OpenArt — ${fr(u.openartImages)} images générées pour ce drama${balance}`);
+    }
+    if (u.falImages) usageRows.push(`🖼️ fal.ai — ${fr(u.falImages)} images`);
+    if (u.pollinationsImages)
+      usageRows.push(`🖼️ Pollinations — ${fr(u.pollinationsImages)} images (gratuit)`);
+  }
+
+  // Voix
+  {
+    const el = credits?.elevenlabs;
+    let balance = '';
+    if (el && el.limit != null) {
+      const rest = Math.max(0, el.limit - el.used);
+      const reset = el.resetAt
+        ? ` — recharge le ${new Date(el.resetAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
+        : '';
+      balance = ` · solde du compte : ${fr(rest)} / ${fr(el.limit)} crédits restants${reset}`;
+    } else if (el && el.error === 'permission') {
+      balance = ' · solde masqué → ajoute la permission « User → Read » à ta clé ElevenLabs';
+    } else if (el && el.error) {
+      balance = ` · solde indisponible (${el.error})`;
+    }
+    if (u.elevenChars || balance) {
+      usageRows.push(
+        `🎙️ ElevenLabs — ${fr(u.elevenChars)} crédits utilisés par ce drama (${fr(u.elevenClips)} répliques)${balance}`,
+      );
+    }
+    if (u.edgeClips) usageRows.push(`🔊 Edge TTS — ${fr(u.edgeClips)} répliques (gratuit)`);
+    if (u.sayClips) usageRows.push(`🗣️ Voix macOS — ${fr(u.sayClips)} répliques (gratuit)`);
+  }
+
+  if (u.claudeCalls) {
+    usageRows.push(`🤖 Claude — ${fr(u.claudeCalls)} générations de scénario (abonnement, sans surcoût)`);
+  }
+
   const usageBar =
-    usageParts.length > 0 ? (
-      <p className="usage-line" title="Consommation cumulée de ce drama depuis l'ajout du compteur">
-        💰 {usageParts.join(' · ')}
-      </p>
+    usageRows.length > 0 ? (
+      <div className="usage-panel">
+        <div className="usage-title">💰 Consommation</div>
+        {usageRows.map((row, i) => (
+          <div key={i} className="usage-row">
+            {row}
+          </div>
+        ))}
+      </div>
     ) : null;
 
   if (stage === 'script_review') {
