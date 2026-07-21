@@ -11,13 +11,15 @@ import {
   saveProject,
   deleteProject,
   projectDir,
+  rendersDir,
   findEpisode,
   findScene,
 } from './projects.js';
-import { startJob, getJob } from './jobs.js';
+import { startJob, getJob, activeJobFor } from './jobs.js';
 import {
   createProject,
   produceEpisode,
+  produceSeason,
   regenerateScript,
   ensureCharacterPortraits,
   regenerateAllImages,
@@ -120,7 +122,7 @@ app.post('/api/projects/:id/regen-script', (req, res) => {
     res.status(404).json({ error: 'Projet introuvable' });
     return;
   }
-  const job = startJob('Nouveau scénario', (update) => regenerateScript(p, update));
+  const job = startJob('Nouveau scénario', (update) => regenerateScript(p, update), { projectId: p.id });
   res.json({ jobId: job.id });
 });
 
@@ -135,12 +137,12 @@ app.post('/api/projects/:id/validate-script', (req, res) => {
     saveProject(p);
     const job = startJob('Portraits des personnages', (update) =>
       ensureCharacterPortraits(p, update),
-    );
+    { projectId: p.id });
     res.json({ stage: p.stage, jobId: job.id });
   } else {
     p.stage = 'production';
     saveProject(p);
-    const job = startJob('Production épisode 1', (update) => produceEpisode(p, 1, update));
+    const job = startJob('Production épisode 1', (update) => produceEpisode(p, 1, update), { projectId: p.id });
     res.json({ stage: p.stage, jobId: job.id });
   }
 });
@@ -153,7 +155,7 @@ app.post('/api/projects/:id/portraits', (req, res) => {
   }
   const job = startJob('Portraits des personnages', (update) =>
     ensureCharacterPortraits(p, update),
-  );
+  { projectId: p.id });
   res.json({ jobId: job.id });
 });
 
@@ -165,8 +167,59 @@ app.post('/api/projects/:id/validate-characters', (req, res) => {
   }
   p.stage = 'production';
   saveProject(p);
-  const job = startJob('Production épisode 1', (update) => produceEpisode(p, 1, update));
+  const job = startJob('Production épisode 1', (update) => produceEpisode(p, 1, update), { projectId: p.id });
   res.json({ stage: p.stage, jobId: job.id });
+});
+
+// Job en cours pour ce projet (permet de raccrocher après un rechargement)
+app.get('/api/projects/:id/active-job', (req, res) => {
+  res.json(activeJobFor(req.params.id));
+});
+
+// Production de TOUTE la saison (script + images + voix + MP4 par épisode)
+app.post('/api/projects/:id/produce-season', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  if (activeJobFor(p.id)) {
+    res.status(409).json({ error: 'Une production est déjà en cours sur ce drama.' });
+    return;
+  }
+  const job = startJob('Production de la saison', (update) => produceSeason(p, update), {
+    projectId: p.id,
+  });
+  res.json({ jobId: job.id });
+});
+
+// Archive .zip de tous les MP4 rendus
+app.get('/api/projects/:id/season.zip', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  const dir = rendersDir(p.id);
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.mp4')) : [];
+  if (files.length === 0) {
+    res.status(404).json({ error: 'Aucun épisode MP4 rendu pour le moment.' });
+    return;
+  }
+  const zipPath = path.join(dir, 'saison.zip');
+  fs.rmSync(zipPath, { force: true });
+  execFile(
+    'zip',
+    ['-j', zipPath, ...files.map((f) => path.join(dir, f))],
+    { timeout: 120000 },
+    (err) => {
+      if (err) {
+        res.status(500).json({ error: `Création du zip impossible : ${err.message}` });
+        return;
+      }
+      res.download(zipPath, `${p.title} - saison complete.zip`);
+    },
+  );
 });
 
 app.post('/api/projects/:id/episodes/:n/regen-audio', (req, res) => {
@@ -177,7 +230,7 @@ app.post('/api/projects/:id/episodes/:n/regen-audio', (req, res) => {
     }
     const job = startJob(`Voix épisode ${ep.number}`, (update) =>
       regenerateAllAudio(p, ep, update),
-    );
+    { projectId: p.id });
     res.json({ jobId: job.id });
   });
 });
@@ -190,7 +243,7 @@ app.post('/api/projects/:id/characters/:charId/portrait', (req, res) => {
   }
   const job = startJob('Portrait de référence', (update) =>
     regenerateCharacterPortrait(p, req.params.charId, update),
-  );
+  { projectId: p.id });
   res.json({ jobId: job.id });
 });
 
@@ -230,7 +283,7 @@ app.post('/api/projects/:id/characters/:charId/new-face', (req, res) => {
   }
   const job = startJob('Nouveau visage', (update) =>
     newCharacterFace(p, req.params.charId, req.body.instructions, update),
-  );
+  { projectId: p.id });
   res.json({ jobId: job.id });
 });
 
@@ -268,7 +321,7 @@ app.post('/api/projects/:id/episodes/:n/produce', (req, res) => {
     res.status(400).json({ error: `Numéro d'épisode invalide (1 à ${EPISODE_COUNT}).` });
     return;
   }
-  const job = startJob(`Production épisode ${n}`, (update) => produceEpisode(p, n, update));
+  const job = startJob(`Production épisode ${n}`, (update) => produceEpisode(p, n, update), { projectId: p.id });
   res.json({ jobId: job.id });
 });
 
@@ -280,7 +333,7 @@ app.post('/api/projects/:id/episodes/:n/regen-images', (req, res) => {
     }
     const job = startJob(`Images épisode ${ep.number}`, (update) =>
       regenerateAllImages(p, ep, update),
-    );
+    { projectId: p.id });
     res.json({ jobId: job.id });
   });
 });
@@ -291,7 +344,7 @@ app.post('/api/projects/:id/episodes/:n/render', (req, res) => {
       res.status(404).json({ error: 'Épisode introuvable' });
       return;
     }
-    const job = startJob(`Rendu épisode ${ep.number}`, (update) => renderEpisode(p, ep, update));
+    const job = startJob(`Rendu épisode ${ep.number}`, (update) => renderEpisode(p, ep, update), { projectId: p.id });
     res.json({ jobId: job.id });
   });
 });
@@ -348,14 +401,14 @@ app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/image', (req, res) => {
     if (typeof req.body.imagePrompt === 'string' && req.body.imagePrompt.trim()) {
       scene.imagePrompt = req.body.imagePrompt.trim();
     }
-    const job = startJob('Nouvelle image', (update) => regenerateSceneImage(p, ep, scene, update));
+    const job = startJob('Nouvelle image', (update) => regenerateSceneImage(p, ep, scene, update), { projectId: p.id });
     res.json({ jobId: job.id });
   });
 });
 
 app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/audio', (req, res) => {
   withScene(req, res, (p, ep, scene) => {
-    const job = startJob('Nouvelles voix', (update) => regenerateSceneAudio(p, ep, scene, update));
+    const job = startJob('Nouvelles voix', (update) => regenerateSceneAudio(p, ep, scene, update), { projectId: p.id });
     res.json({ jobId: job.id });
   });
 });

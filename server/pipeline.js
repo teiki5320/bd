@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { SPEAKER_COLORS } from '../shared/catalog.js';
+import { SPEAKER_COLORS, EPISODE_COUNT } from '../shared/catalog.js';
+import { renderEpisode } from './render.js';
 import {
   askClaudeForJson,
   buildSeriesPrompt,
@@ -294,6 +295,41 @@ export async function regenerateScript(project, update) {
   project.episodes = [normalizeEpisode(ep1raw, 1)];
   project.stage = 'script_review';
   saveProject(project);
+}
+
+// Produit TOUTE la saison : pour chaque épisode restant, scénario + images +
+// voix + rendu MP4. Long (souvent > 1 h avec OpenArt) — la progression est
+// détaillée épisode par épisode et l'interface peut raccrocher en cours de route.
+export async function produceSeason(project, update) {
+  let doneCount = 0;
+  const failures = [];
+  for (let n = 1; n <= EPISODE_COUNT; n++) {
+    const existing = findEpisode(project, n);
+    if (existing && existing.status === 'done' && existing.renderedFile) {
+      doneCount++;
+      continue;
+    }
+    const prefix = `Épisode ${n}/${EPISODE_COUNT} — `;
+    try {
+      await produceEpisode(project, n, (step, p) =>
+        update(prefix + step, (n - 1 + (p || 0) * 0.7) / EPISODE_COUNT),
+      );
+      const ep = findEpisode(project, n);
+      await renderEpisode(project, ep, (step, p) =>
+        update(prefix + step, (n - 1 + 0.7 + (p || 0) * 0.3) / EPISODE_COUNT),
+      );
+      doneCount++;
+    } catch (e) {
+      console.error(`Saison — épisode ${n} :`, e.message);
+      failures.push(`épisode ${n} (${e.message.slice(0, 120)})`);
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(
+      `${doneCount}/${EPISODE_COUNT} épisodes terminés. En échec : ${failures.join(' ; ')}`,
+    );
+  }
+  return { episodes: doneCount };
 }
 
 export async function produceEpisode(project, number, update) {

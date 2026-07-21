@@ -476,6 +476,52 @@ code {
   color: var(--gold);
 }
 
+.ep-count.stage {
+  color: var(--gold-dim);
+}
+
+.downloads-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.downloads-title {
+  color: var(--gold-dim);
+  font-size: 0.78rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.downloads-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dl-chip {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+
+.dl-chip:hover {
+  border-color: var(--gold-dim);
+}
+
+.dl-chip.all {
+  background: var(--gold);
+  color: #1a1508;
+  border-color: var(--gold);
+  font-weight: 700;
+}
+
 /* ---------- Étapes de validation ---------- */
 
 .review-panel {
