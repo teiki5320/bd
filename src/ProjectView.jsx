@@ -720,6 +720,9 @@ export function ProjectView({ projectId, onBack }) {
                       </a>
                     )}
                   </div>
+                  <p className="downloads-hint">
+                    📁 Copiés automatiquement dans <strong>Bureau → Dramas → {project.title}</strong>
+                  </p>
                 </div>
               )}
             </div>

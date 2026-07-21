@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { ROOT, PORT } from './config.js';
 import { rendersDir, saveProject } from './projects.js';
+import { exportEpisode } from './exporter.js';
 
 let bundlePromise = null;
 
@@ -72,5 +73,13 @@ export async function renderEpisode(project, episode, update) {
   episode.renderedFile = `renders/${outName}`;
   episode.status = 'done';
   saveProject(project);
-  return { file: episode.renderedFile };
+
+  update('Copie dans Bureau/Dramas…');
+  const exported = exportEpisode(project, episode);
+  if (exported) {
+    episode.exportedTo = exported;
+    saveProject(project);
+  }
+
+  return { file: episode.renderedFile, exportedTo: exported };
 }

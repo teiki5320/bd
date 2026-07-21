@@ -522,6 +522,12 @@ code {
   font-weight: 700;
 }
 
+.downloads-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 8px;
+}
+
 /* ---------- Étapes de validation ---------- */
 
 .review-panel {
