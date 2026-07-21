@@ -12,6 +12,7 @@ async function request(url, options = {}) {
 
 export const api = {
   health: () => request('/api/health'),
+  credits: () => request('/api/credits'),
   listProjects: () => request('/api/projects'),
   getProject: (id) => request(`/api/projects/${id}`),
   deleteProject: (id) => request(`/api/projects/${id}`, { method: 'DELETE' }),

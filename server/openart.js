@@ -107,6 +107,39 @@ async function downloadImage(url) {
   return buf;
 }
 
+// Solde de crédits OpenArt via le MCP (mis en cache 10 min — chaque
+// consultation coûte un appel Claude headless).
+let creditsCache = { at: 0, value: null };
+const CREDITS_TTL_MS = 10 * 60 * 1000;
+
+export async function openartCredits() {
+  if (Date.now() - creditsCache.at < CREDITS_TTL_MS) {
+    return creditsCache.value;
+  }
+  const mcpName = await detectMcpName();
+  const text = await runClaude(
+    `Tu as accès aux outils MCP OpenArt. Consulte le SOLDE DE CRÉDITS restant de mon compte OpenArt (cherche un outil de type account / credits / balance / profile). Réponds UNIQUEMENT avec un objet JSON : {"credits": nombre} — ou "ERREUR: cause précise" si aucun outil ne permet de le savoir.`,
+    mcpName,
+  );
+  let value;
+  if (/^ERREUR/i.test(text.trim())) {
+    value = { error: text.trim().replace(/^ERREUR\s*:\s*/i, '').slice(0, 200) };
+  } else {
+    const m = text.match(/\{[^{}]*"credits"[^{}]*\}/);
+    if (!m) {
+      value = { error: 'solde illisible' };
+    } else {
+      try {
+        value = { credits: Number(JSON.parse(m[0]).credits) };
+      } catch {
+        value = { error: 'solde illisible' };
+      }
+    }
+  }
+  creditsCache = { at: Date.now(), value };
+  return value;
+}
+
 // Retourne { buffer, url } — l'URL sert de référence de visage pour les scènes suivantes.
 export async function openartGenerate({ prompt, referenceUrls = [] }) {
   const mcpName = await detectMcpName();

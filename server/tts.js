@@ -238,6 +238,31 @@ async function synthesizeSay(text, sayVoice, outBase) {
 let edgeFailedAt = 0;
 const EDGE_RETRY_AFTER_MS = 10 * 60 * 1000;
 
+// Solde de crédits ElevenLabs (nécessite la permission « User → Read » sur la clé).
+export async function elevenBalance() {
+  const key = process.env.ELEVENLABS_API_KEY;
+  if (!key) {
+    return null;
+  }
+  const res = await fetch('https://api.elevenlabs.io/v1/user/subscription', {
+    headers: { 'xi-api-key': key },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    if (/user_read|missing_permission/i.test(t)) {
+      return { error: 'permission' };
+    }
+    return { error: `HTTP ${res.status}` };
+  }
+  const d = await res.json();
+  return {
+    used: d.character_count,
+    limit: d.character_limit,
+    resetAt: d.next_character_count_reset_unix ? d.next_character_count_reset_unix * 1000 : null,
+  };
+}
+
 // Décrit la chaîne de voix active (affichée dans l'interface).
 export function ttsInfo() {
   const pref = (process.env.TTS_PROVIDER || 'auto').toLowerCase();

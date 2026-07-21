@@ -32,7 +32,8 @@ import {
 } from './pipeline.js';
 import { renderEpisode } from './render.js';
 import { currentProvider } from './images.js';
-import { ttsInfo } from './tts.js';
+import { ttsInfo, elevenBalance } from './tts.js';
+import { openartCredits } from './openart.js';
 
 const app = express();
 app.use(express.json({ limit: '60mb' }));
@@ -48,6 +49,23 @@ app.get('/api/health', (req, res) => {
       episodeCount: EPISODE_COUNT,
     });
   });
+});
+
+// ---------- Soldes de crédits (ElevenLabs + OpenArt) ----------
+let creditsCache = { at: 0, data: null };
+app.get('/api/credits', async (req, res) => {
+  if (creditsCache.data && Date.now() - creditsCache.at < 60000) {
+    res.json(creditsCache.data);
+    return;
+  }
+  const [elevenlabs, openart] = await Promise.all([
+    elevenBalance().catch((e) => ({ error: e.message })),
+    currentProvider() === 'openart'
+      ? openartCredits().catch((e) => ({ error: e.message }))
+      : Promise.resolve(null),
+  ]);
+  creditsCache = { at: Date.now(), data: { elevenlabs, openart } };
+  res.json(creditsCache.data);
 });
 
 // ---------- Projets ----------
