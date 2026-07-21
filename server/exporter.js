@@ -4,9 +4,23 @@ import fs from 'node:fs';
 import { projectDir, listProjects, loadProject } from './projects.js';
 
 // Dossier d'export des épisodes validés : Bureau/Dramas/<Titre du drama>/
-// (modifiable avec EXPORT_DIR dans .env)
-export const EXPORT_ROOT =
-  process.env.EXPORT_DIR || path.join(os.homedir(), 'Desktop', 'Dramas');
+// EXPORT_DIR dans .env pour changer, avec le raccourci EXPORT_DIR=icloud
+// qui vise iCloud Drive → Dramas (synchronisé sur tous les appareils).
+function resolveExportRoot() {
+  const raw = (process.env.EXPORT_DIR || '').trim();
+  if (raw.toLowerCase() === 'icloud') {
+    return path.join(
+      os.homedir(),
+      'Library',
+      'Mobile Documents',
+      'com~apple~CloudDocs',
+      'Dramas',
+    );
+  }
+  return raw || path.join(os.homedir(), 'Desktop', 'Dramas');
+}
+
+export const EXPORT_ROOT = resolveExportRoot();
 
 function sanitizeName(s) {
   return (
