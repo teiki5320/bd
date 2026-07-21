@@ -56,12 +56,14 @@ export function listProjects() {
           title: p.title,
           logline: p.logline,
           styles: p.styles,
+          stage: p.stage || 'production',
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
           episodes: (p.episodes || []).map((e) => ({
             number: e.number,
             title: e.title,
             status: e.status,
+            rendered: Boolean(e.renderedFile),
           })),
         });
       }

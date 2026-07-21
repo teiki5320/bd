@@ -2,11 +2,12 @@ import crypto from 'node:crypto';
 
 const jobs = new Map();
 
-export function startJob(label, fn) {
+export function startJob(label, fn, meta = {}) {
   const id = `job_${crypto.randomBytes(6).toString('hex')}`;
   const job = {
     id,
     label,
+    projectId: meta.projectId || null,
     status: 'running',
     step: '',
     progress: null,
@@ -46,4 +47,15 @@ export function startJob(label, fn) {
 
 export function getJob(id) {
   return jobs.get(id) || null;
+}
+
+// Job en cours pour un projet — permet à l'interface de « raccrocher »
+// une production longue après un rechargement de la page.
+export function activeJobFor(projectId) {
+  for (const job of jobs.values()) {
+    if (job.status === 'running' && job.projectId === projectId) {
+      return job;
+    }
+  }
+  return null;
 }

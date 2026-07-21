@@ -357,6 +357,27 @@ export function ProjectView({ projectId, onBack }) {
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
     loadCredits();
+    // Raccroche une production en cours (après un rechargement de la page)
+    api
+      .activeJob(projectId)
+      .then((j) => {
+        if (j && j.status === 'running') {
+          setBusy(true);
+          let tick = 0;
+          followJob(j.id, (jj) => {
+            setJob(jj);
+            if (++tick % 5 === 0) refresh().catch(() => {});
+          })
+            .catch((e) => setError(e.message))
+            .finally(() => {
+              setBusy(false);
+              setJob(null);
+              refresh().catch(() => {});
+              loadCredits();
+            });
+        }
+      })
+      .catch(() => {});
   }, [projectId]);
 
   const episode = useMemo(
@@ -374,7 +395,12 @@ export function ProjectView({ projectId, onBack }) {
     setError(null);
     try {
       const { jobId } = await kickoff();
-      await followJob(jobId, setJob);
+      let tick = 0;
+      await followJob(jobId, (j) => {
+        setJob(j);
+        // rafraîchit le projet en continu pendant les longues productions
+        if (++tick % 5 === 0) refresh().catch(() => {});
+      });
       await refresh();
       loadCredits();
       return true;
@@ -413,6 +439,9 @@ export function ProjectView({ projectId, onBack }) {
   const nextNumber = producedNumbers.length < EPISODE_COUNT ? Math.max(...producedNumbers) + 1 : null;
   const currentDone = episode?.status === 'done';
   const stage = project.stage || 'production';
+  const renderedEpisodes = project.episodes.filter((e) => e.renderedFile);
+  const remainingCount =
+    EPISODE_COUNT - project.episodes.filter((e) => e.status === 'done' && e.renderedFile).length;
 
   const header = (
     <header className="project-header">
@@ -652,6 +681,46 @@ export function ProjectView({ projectId, onBack }) {
                 >
                   ▶️ Produire l'épisode {nextNumber}
                 </button>
+              )}
+              {remainingCount > 0 && (
+                <button
+                  className="btn-ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      confirm(
+                        `Produire automatiquement les ${remainingCount} épisodes restants (scénario, images, voix et MP4) ?\n\nC'est long — souvent plus d'une heure avec OpenArt — et ça consomme tes crédits images et ElevenLabs. Tu peux fermer la page et revenir : la production continue et l'avancement se raccroche tout seul.`,
+                      )
+                    ) {
+                      runJob(() => api.produceSeason(projectId));
+                    }
+                  }}
+                >
+                  🚀 Produire toute la saison ({remainingCount} restant{remainingCount > 1 ? 's' : ''})
+                </button>
+              )}
+              {renderedEpisodes.length > 0 && (
+                <div className="downloads-box">
+                  <div className="downloads-title">📥 Épisodes prêts</div>
+                  <div className="downloads-links">
+                    {renderedEpisodes.map((e) => (
+                      <a
+                        key={e.number}
+                        className="dl-chip"
+                        href={`/files/${project.id}/${e.renderedFile}`}
+                        download={`${project.title} - episode ${e.number}.mp4`}
+                        title={e.title}
+                      >
+                        Ép. {e.number}
+                      </a>
+                    ))}
+                    {renderedEpisodes.length > 1 && (
+                      <a className="dl-chip all" href={`/api/projects/${project.id}/season.zip`}>
+                        ⬇️ Tout (.zip)
+                      </a>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </div>

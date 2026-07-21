@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { STYLES, MAX_STYLES } from '../shared/catalog.js';
+import { STYLES, MAX_STYLES, EPISODE_COUNT } from '../shared/catalog.js';
 import { api, followJob } from './api.js';
 import { ProjectView } from './ProjectView.jsx';
 
@@ -161,10 +161,23 @@ export function App() {
                     );
                   })}
                 </div>
-                <p className="ep-count">
-                  {(p.episodes || []).filter((e) => e.status === 'done').length} /{' '}
-                  {health?.episodeCount || 10} épisodes produits
-                </p>
+                {(() => {
+                  if (p.stage === 'script_review') {
+                    return <p className="ep-count stage">📝 Scénario à valider</p>;
+                  }
+                  if (p.stage === 'characters_review') {
+                    return <p className="ep-count stage">👥 Personnages à valider</p>;
+                  }
+                  const eps = p.episodes || [];
+                  const produced = eps.filter((e) => e.status === 'ready' || e.status === 'done').length;
+                  const mp4 = eps.filter((e) => e.rendered).length;
+                  return (
+                    <p className="ep-count">
+                      {produced} / {EPISODE_COUNT} épisodes produits
+                      {mp4 > 0 ? ` · ${mp4} MP4 prêt${mp4 > 1 ? 's' : ''}` : ''}
+                    </p>
+                  );
+                })()}
                 <button
                   className="btn-ghost danger"
                   onClick={(e) => {

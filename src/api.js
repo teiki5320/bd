@@ -20,6 +20,8 @@ export const api = {
     request('/api/projects', { method: 'POST', body: JSON.stringify({ styles, theme }) }),
   produceEpisode: (id, n) =>
     request(`/api/projects/${id}/episodes/${n}/produce`, { method: 'POST' }),
+  produceSeason: (id) => request(`/api/projects/${id}/produce-season`, { method: 'POST' }),
+  activeJob: (id) => request(`/api/projects/${id}/active-job`),
   renderEpisode: (id, n) =>
     request(`/api/projects/${id}/episodes/${n}/render`, { method: 'POST' }),
   regenAllImages: (id, n) =>
