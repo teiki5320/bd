@@ -571,6 +571,47 @@ code {
   font-size: 0.8rem;
 }
 
+.review-panel.wide {
+  max-width: 1100px;
+}
+
+.voice-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.voice-row select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 0.78rem;
+}
+
+.face-instructions {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.face-instructions:focus {
+  border-color: var(--gold-dim);
+}
+
+.char-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .char-strip {
   display: flex;
   flex-wrap: wrap;

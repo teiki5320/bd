@@ -3,7 +3,7 @@ import { Player } from '@remotion/player';
 import { Episode } from './remotion/Episode.jsx';
 import { FPS, WIDTH, HEIGHT, episodeDurationInFrames } from './remotion/timing.js';
 import { api, followJob, fileToDataUrl } from './api.js';
-import { EPISODE_COUNT } from '../shared/catalog.js';
+import { EPISODE_COUNT, VOICES } from '../shared/catalog.js';
 
 const STATUS_LABELS = {
   script: '📝 script',
@@ -77,35 +77,121 @@ function ScriptReview({ project, busy, onRegen, onValidate }) {
   );
 }
 
+// Carte d'un personnage à l'étape de validation : visage + casting vocal.
+function CharReviewCard({ project, projectId, c, busy, runJob }) {
+  const [instructions, setInstructions] = useState('');
+  const [listening, setListening] = useState(false);
+  const [voice, setVoice] = useState(c.elevenVoice || '');
+
+  useEffect(() => {
+    setVoice(c.elevenVoice || '');
+  }, [c.elevenVoice]);
+
+  const voiceOptions = VOICES.filter(
+    (v) => v.gender === (c.gender || 'homme') || v.id === voice,
+  );
+
+  const changeVoice = async (voiceId) => {
+    setVoice(voiceId);
+    try {
+      await api.patchCharacter(projectId, c.id, { elevenVoice: voiceId });
+    } catch (e) {
+      alert(`Changement de voix impossible : ${e.message}`);
+    }
+  };
+
+  const listen = async () => {
+    setListening(true);
+    try {
+      const { file } = await api.voicePreview(projectId, c.id, voice);
+      await new Audio(`/files/${projectId}/${file}`).play();
+    } catch (e) {
+      alert(`Pré-écoute impossible : ${e.message}`);
+    } finally {
+      setListening(false);
+    }
+  };
+
+  return (
+    <div className="char-card">
+      {c.portrait ? (
+        <img src={`/files/${projectId}/${c.portrait}?v=${c.portraitVersion || 0}`} alt={c.name} />
+      ) : (
+        <div className="char-card-ph">👤</div>
+      )}
+      <strong style={{ color: c.color }}>{c.name}</strong>
+      <span className="char-role">
+        {c.role} — {c.age} ans
+      </span>
+
+      <div className="voice-row">
+        <select value={voice} disabled={busy} onChange={(e) => changeVoice(e.target.value)}>
+          {voiceOptions.map((v) => (
+            <option key={v.id} value={v.id}>
+              🎙️ {v.name} — {v.desc}
+            </option>
+          ))}
+        </select>
+        <button
+          className="btn-small"
+          disabled={busy || listening}
+          title="Écouter cette voix avec une réplique du personnage"
+          onClick={listen}
+        >
+          {listening ? '⏳' : '▶️'}
+        </button>
+      </div>
+
+      <input
+        className="face-instructions"
+        placeholder="Consignes (optionnel) : plus âgé, boubou bleu…"
+        value={instructions}
+        maxLength={200}
+        onChange={(e) => setInstructions(e.target.value)}
+      />
+      <div className="char-card-actions">
+        <button
+          className="btn-small primary"
+          disabled={busy}
+          title="Claude réécrit l'apparence (guidée par tes consignes), puis le portrait est régénéré"
+          onClick={() => runJob(() => api.newFace(projectId, c.id, instructions))}
+        >
+          ✨ Nouveau visage
+        </button>
+        <button
+          className="btn-small"
+          disabled={busy}
+          title="Regénère le portrait avec la même description (variation légère)"
+          onClick={() => runJob(() => api.regenPortrait(projectId, c.id))}
+        >
+          🎲
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Étape 2 : validation des personnages ----------
 function CharactersReview({ project, busy, runJob, onValidate, projectId }) {
   const missing = project.characters.filter((c) => !c.portrait).length;
   return (
-    <div className="review-panel">
+    <div className="review-panel wide">
       <div className="review-step">Étape 2 / 3 — Les personnages</div>
-      <h2>Les visages de « {project.title} »</h2>
+      <h2>Les visages et les voix de « {project.title} »</h2>
       <p className="logline">
-        Ces portraits servent de référence : chaque scène sera générée avec ces visages.
-        Régénère ceux qui ne te plaisent pas avant de valider.
+        Les portraits servent de référence pour toutes les scènes. « ✨ Nouveau visage » réinvente
+        l'apparence (guidée par tes consignes) ; le menu choisit la voix, ▶️ pour l'écouter.
       </p>
       <div className="char-grid">
         {project.characters.map((c) => (
-          <div key={c.id} className="char-card">
-            {c.portrait ? (
-              <img src={`/files/${project.id}/${c.portrait}?v=${c.portraitVersion || 0}`} alt={c.name} />
-            ) : (
-              <div className="char-card-ph">👤</div>
-            )}
-            <strong style={{ color: c.color }}>{c.name}</strong>
-            <span className="char-role">{c.role}</span>
-            <button
-              className="btn-small"
-              disabled={busy}
-              onClick={() => runJob(() => api.regenPortrait(projectId, c.id))}
-            >
-              🔄 Régénérer
-            </button>
-          </div>
+          <CharReviewCard
+            key={c.id}
+            project={project}
+            projectId={projectId}
+            c={c}
+            busy={busy}
+            runJob={runJob}
+          />
         ))}
       </div>
       <div className="review-actions">
@@ -332,6 +418,16 @@ export function ProjectView({ projectId, onBack }) {
         <h1>{project.title}</h1>
         <p className="logline">{project.logline}</p>
       </div>
+      {stage === 'production' && (
+        <button
+          className="btn-ghost"
+          disabled={busy}
+          title="Revoir les visages et les voix des personnages"
+          onClick={() => api.reviewCharacters(projectId).then(refresh)}
+        >
+          👥 Personnages
+        </button>
+      )}
       <label className="btn-ghost upload" title="Musique de fond de tous les épisodes (MP3)">
         {project.musicFile ? '🎵 Changer la musique' : '🎵 Ajouter une musique'}
         <input

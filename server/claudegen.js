@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
-import { EPISODE_COUNT, styleLabel } from '../shared/catalog.js';
+import { EPISODE_COUNT, styleLabel, VOICES } from '../shared/catalog.js';
+
+const VOICE_CATALOG = VOICES.map((v) => `"${v.id}" = ${v.name} (${v.gender}, ${v.desc})`).join(' ; ');
 
 // Appelle Claude Code en mode non interactif (`claude -p`).
 // Utilise la session Claude Code de la machine (abonnement) — aucune clé API.
@@ -102,7 +104,8 @@ Réponds UNIQUEMENT avec un objet JSON valide (aucun texte autour, aucun comment
     "gender": "homme" ou "femme",
     "age": nombre,
     "role": "rôle dans l'histoire",
-    "visual": "EN ANGLAIS : description physique très détaillée et STABLE (âge apparent, visage, coiffure, tenue signature, corpulence) réutilisée à l'identique dans toutes les images"
+    "visual": "EN ANGLAIS : description physique très détaillée et STABLE (âge apparent, visage, coiffure, tenue signature, corpulence) réutilisée à l'identique dans toutes les images",
+    "voice": "CASTING VOCAL : l'id EXACT de la voix la plus adaptée au genre, à l'âge et à la personnalité du personnage, choisie dans ce catalogue : ${VOICE_CATALOG}"
   }],
   "episodeSummaries": [${EPISODE_COUNT} éléments : {"number": n, "title": "titre", "summary": "résumé en 2 phrases avec le cliffhanger"}],
   "episode1": {
@@ -152,6 +155,17 @@ Réponds UNIQUEMENT avec un objet JSON valide (aucun texte autour) :
 }
 
 Contraintes STRICTES : total des répliques ≈ 140 mots ; répliques ≤ 18 mots ; "speaker" = "narrator" ou un id de personnage listé ci-dessus ; imagePrompt autonomes incluant les descriptions visuelles complètes.`;
+}
+
+export function buildNewFacePrompt(character, instructions) {
+  return `Personnage d'une série micro-drama africaine : ${character.name}, ${character.gender}, ${character.age} ans, ${character.role}.
+Description visuelle actuelle (EN ANGLAIS) : ${character.visual}
+${
+  instructions
+    ? `Consignes du réalisateur pour la NOUVELLE apparence : ${instructions}`
+    : `Invente une apparence NETTEMENT différente de l'actuelle (autre visage, autre coiffure, autre tenue signature), cohérente avec l'âge, le genre et le rôle.`
+}
+Réponds UNIQUEMENT avec un objet JSON valide : {"visual": "nouvelle description physique EN ANGLAIS, très détaillée et STABLE (âge apparent, visage, coiffure, tenue signature, corpulence)"}`;
 }
 
 export async function askClaudeForJson(prompt) {

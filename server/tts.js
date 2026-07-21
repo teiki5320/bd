@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { execFile } from 'node:child_process';
+import { VOICES } from '../shared/catalog.js';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { parseFile } from 'music-metadata';
@@ -47,20 +48,15 @@ const SAY_MALE = ['Thomas', 'Nicolas'];
 const SAY_FEMALE = ['Amélie', 'Audrey', 'Aurélie', 'Chantal'];
 const NARRATOR_SAY = 'Thomas';
 
-// Voix ElevenLabs (préinstallées, multilingues — parlent français naturellement).
-const ELEVEN_MALE = [
-  'onwK4e9ZLuTAKqWW03F9', // Daniel — posé
-  'nPczCjzI2devNBz1zQrb', // Brian — profond
-  'cjVigY5qzO86Huf0OWal', // Eric — chaleureux
-  'bIHbv24MWmeRgasZH58o', // Will — jeune
-];
-const ELEVEN_FEMALE = [
-  'EXAVITQu4vr4xnSDxMaL', // Sarah — douce
-  'XB0fDUnXU5powFXDhCwa', // Charlotte — expressive
-  'FGY2WhTYpPnrIDTdsKH5', // Laura — vive
-  'pFZP5JQG7iQjIQuC4Bku', // Lily — posée
-];
-const ELEVEN_NARRATOR = 'onwK4e9ZLuTAKqWW03F9';
+// Voix ElevenLabs — catalogue partagé (shared/catalog.js), casting par Claude
+// ou choix manuel dans l'interface ; ces pools servent de repli.
+const ELEVEN_MALE = VOICES.filter((v) => v.gender === 'homme').map((v) => v.id);
+const ELEVEN_FEMALE = VOICES.filter((v) => v.gender === 'femme').map((v) => v.id);
+const ELEVEN_NARRATOR = 'onwK4e9ZLuTAKqWW03F9'; // Daniel
+
+export function isCatalogVoice(id) {
+  return VOICES.some((v) => v.id === id);
+}
 
 // Attribue une voix distincte à chaque personnage selon son genre.
 export function assignVoices(characters) {
@@ -70,12 +66,13 @@ export function assignVoices(characters) {
     if ((c.gender || '').toLowerCase().startsWith('f')) {
       c.voice = FEMALE_VOICES[f % FEMALE_VOICES.length];
       c.sayVoice = SAY_FEMALE[f % SAY_FEMALE.length];
-      c.elevenVoice = ELEVEN_FEMALE[f % ELEVEN_FEMALE.length];
+      // ne pas écraser un casting déjà fait (par Claude ou par l'utilisateur)
+      c.elevenVoice = c.elevenVoice || ELEVEN_FEMALE[f % ELEVEN_FEMALE.length];
       f++;
     } else {
       c.voice = MALE_VOICES[m % MALE_VOICES.length];
       c.sayVoice = SAY_MALE[m % SAY_MALE.length];
-      c.elevenVoice = ELEVEN_MALE[m % ELEVEN_MALE.length];
+      c.elevenVoice = c.elevenVoice || ELEVEN_MALE[m % ELEVEN_MALE.length];
       m++;
     }
   }
