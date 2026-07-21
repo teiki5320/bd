@@ -25,6 +25,8 @@ import {
   regenerateSceneImage,
   regenerateSceneAudio,
   regenerateCharacterPortrait,
+  newCharacterFace,
+  characterVoicePreview,
   saveUploadedImage,
   saveUploadedMusic,
 } from './pipeline.js';
@@ -172,6 +174,58 @@ app.post('/api/projects/:id/characters/:charId/portrait', (req, res) => {
     regenerateCharacterPortrait(p, req.params.charId, update),
   );
   res.json({ jobId: job.id });
+});
+
+// Changement de voix d'un personnage
+app.patch('/api/projects/:id/characters/:charId', (req, res) => {
+  const p = loadProject(req.params.id);
+  const c = p && (p.characters || []).find((x) => x.id === req.params.charId);
+  if (!p || !c) {
+    res.status(404).json({ error: 'Personnage introuvable' });
+    return;
+  }
+  if (typeof req.body.elevenVoice === 'string' && req.body.elevenVoice) {
+    c.elevenVoice = req.body.elevenVoice;
+  }
+  saveProject(p);
+  res.json(p);
+});
+
+// Pré-écoute d'une voix (réplique réelle du personnage)
+app.post('/api/projects/:id/characters/:charId/voice-preview', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  characterVoicePreview(p, req.params.charId, req.body.elevenVoice)
+    .then((file) => res.json({ file }))
+    .catch((e) => res.status(500).json({ error: e.message }));
+});
+
+// « Nouveau visage » : réécriture de la description + nouveau portrait
+app.post('/api/projects/:id/characters/:charId/new-face', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  const job = startJob('Nouveau visage', (update) =>
+    newCharacterFace(p, req.params.charId, req.body.instructions, update),
+  );
+  res.json({ jobId: job.id });
+});
+
+// Rouvrir l'étape personnages sur un projet déjà en production
+app.post('/api/projects/:id/review-characters', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  p.stage = 'characters_review';
+  saveProject(p);
+  res.json({ stage: p.stage });
 });
 
 // ---------- Épisodes ----------

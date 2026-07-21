@@ -1,9 +1,14 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { SPEAKER_COLORS } from '../shared/catalog.js';
-import { askClaudeForJson, buildSeriesPrompt, buildEpisodePrompt } from './claudegen.js';
+import {
+  askClaudeForJson,
+  buildSeriesPrompt,
+  buildEpisodePrompt,
+  buildNewFacePrompt,
+} from './claudegen.js';
 import { generateImage, currentProvider } from './images.js';
-import { assignVoices, synthesize, voiceFor } from './tts.js';
+import { assignVoices, synthesize, voiceFor, isCatalogVoice } from './tts.js';
 import {
   newId,
   createProjectDirs,
@@ -182,6 +187,8 @@ export async function createProject({ styles, theme }, update) {
       age: c.age || 30,
       role: c.role || '',
       visual: c.visual || '',
+      // casting vocal proposé par Claude (validé contre le catalogue)
+      elevenVoice: isCatalogVoice(c.voice) ? c.voice : undefined,
       color: SPEAKER_COLORS[i % SPEAKER_COLORS.length],
     })),
   );
@@ -230,6 +237,7 @@ export async function regenerateScript(project, update) {
       age: c.age || 30,
       role: c.role || '',
       visual: c.visual || '',
+      elevenVoice: isCatalogVoice(c.voice) ? c.voice : undefined,
       color: SPEAKER_COLORS[i % SPEAKER_COLORS.length],
     })),
   );
@@ -303,6 +311,67 @@ export async function regenerateSceneImage(project, episode, scene, update) {
     delete scene.imageError;
   }
   saveProject(project);
+}
+
+// « Nouveau visage » : Claude réécrit la description physique (guidée par les
+// instructions éventuelles), les prompts d'images existants sont mis à jour,
+// puis le portrait de référence est régénéré.
+export async function newCharacterFace(project, characterId, instructions, update) {
+  const c = (project.characters || []).find((x) => x.id === characterId);
+  if (!c) {
+    throw new Error('Personnage introuvable');
+  }
+  update(`Réécriture de ${c.name} par Claude…`);
+  const data = await askClaudeForJson(buildNewFacePrompt(c, (instructions || '').slice(0, 300)));
+  const newVisual = String(data.visual || '').trim();
+  if (!newVisual) {
+    throw new Error("Claude n'a pas fourni de nouvelle description.");
+  }
+  const oldVisual = c.visual;
+  c.visual = newVisual;
+  // Les prompts de scènes recopient la description mot pour mot → remplacement direct.
+  if (oldVisual) {
+    for (const ep of project.episodes || []) {
+      for (const s of ep.scenes || []) {
+        if (s.imagePrompt && s.imagePrompt.includes(oldVisual)) {
+          s.imagePrompt = s.imagePrompt.split(oldVisual).join(newVisual);
+        }
+      }
+    }
+  }
+  c.portrait = null;
+  c.portraitUrl = null;
+  saveProject(project);
+  await ensureCharacterPortraits(project, update);
+}
+
+// Extrait audio de pré-écoute d'une voix pour un personnage (réplique réelle si possible).
+export async function characterVoicePreview(project, characterId, elevenVoiceOverride) {
+  const c = (project.characters || []).find((x) => x.id === characterId);
+  if (!c) {
+    throw new Error('Personnage introuvable');
+  }
+  let line = null;
+  for (const ep of project.episodes || []) {
+    for (const s of ep.scenes || []) {
+      const found = (s.lines || []).find((l) => l.speaker === characterId);
+      if (found) {
+        line = found.text;
+        break;
+      }
+    }
+    if (line) break;
+  }
+  const text = line || `Je m'appelle ${c.name}. ${c.role}.`;
+  const v = voiceFor(project, characterId);
+  const base = path.join(assetsDir(project.id), `preview_${characterId}_${Date.now()}`);
+  const { file } = await synthesize({
+    text,
+    ...v,
+    elevenVoice: elevenVoiceOverride || v.elevenVoice,
+    outBase: base,
+  });
+  return path.basename(file);
 }
 
 // Refait le portrait de référence d'un personnage (les scènes suivantes l'utiliseront).
