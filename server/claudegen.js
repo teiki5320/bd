@@ -117,9 +117,11 @@ Réponds UNIQUEMENT avec un objet JSON valide (aucun texte autour, aucun comment
 }
 
 Contraintes STRICTES :
-- Total des répliques de l'épisode ≈ 140 mots (≈ 60 secondes de voix). Répliques courtes, naturelles, dialectes d'Afrique de l'Ouest francophone bienvenus par petites touches.
-- Drame intense : conflits, retournements, émotions fortes. Chaque scène fait avancer l'intrigue.
-- Le narrateur ("narrator") n'intervient que pour poser le décor ou créer la tension (2-3 fois max par épisode).
+- CLARTÉ AVANT TOUT : un spectateur qui découvre l'épisode sur son téléphone doit tout comprendre du premier coup. Phrases courtes et simples, aucun sous-entendu obscur, aucune ellipse confuse. Une scène = une seule idée claire qui fait avancer l'intrigue. Les personnages s'appellent par leur prénom dans les dialogues pour qu'on sache toujours qui parle à qui.
+- Le narrateur ("narrator") OUVRE l'épisode en posant la situation en une phrase simple (« Awa vient d'enterrer son père. Ce matin, le notaire lit le testament. »), puis n'intervient que pour clarifier une transition (3 fois max par épisode).
+- DRAMA MAXIMAL : conflits frontaux, confrontations directes en face à face, révélations chocs, phrases qui claquent. Chaque épisode contient AU MOINS une confrontation intense et une révélation. Émotions fortes et assumées : colère, larmes, menaces, amour interdit, humiliation publique.
+- Total des répliques de l'épisode ≈ 140 mots (≈ 60 secondes de voix). Répliques ≤ 18 mots, percutantes, naturelles à l'oral, expressions d'Afrique de l'Ouest francophone par petites touches.
+- Le cliffhanger final doit donner physiquement envie de voir la suite (danger imminent, secret sur le point d'éclater, retournement).
 - Les "imagePrompt" sont autonomes : quelqu'un qui n'a pas lu le script doit pouvoir générer l'image.`;
 }
 
@@ -154,7 +156,12 @@ Réponds UNIQUEMENT avec un objet JSON valide (aucun texte autour) :
   "cliffhanger": "phrase de suspense finale"
 }
 
-Contraintes STRICTES : total des répliques ≈ 140 mots ; répliques ≤ 18 mots ; "speaker" = "narrator" ou un id de personnage listé ci-dessus ; imagePrompt autonomes incluant les descriptions visuelles complètes.`;
+Contraintes STRICTES :
+- CLARTÉ AVANT TOUT : tout doit se comprendre du premier coup. Phrases courtes et simples, une seule idée par scène, les personnages s'appellent par leur prénom. Le narrateur ouvre l'épisode en rappelant la situation en une phrase simple, puis 3 interventions max.
+- DRAMA MAXIMAL : au moins une confrontation intense en face à face et une révélation choc dans l'épisode. Émotions fortes et assumées, phrases qui claquent.
+- Total des répliques ≈ 140 mots ; répliques ≤ 18 mots, percutantes et naturelles à l'oral.
+- Cliffhanger final irrésistible (danger imminent, secret sur le point d'éclater, retournement).
+- "speaker" = "narrator" ou un id de personnage listé ci-dessus ; imagePrompt autonomes incluant les descriptions visuelles complètes.`;
 }
 
 export function buildNewFacePrompt(character, instructions) {

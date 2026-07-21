@@ -453,10 +453,30 @@ export function ProjectView({ projectId, onBack }) {
     </>
   );
 
+  const u = project.usage || {};
+  const usageParts = [];
+  if (u.openartImages) usageParts.push(`🎨 ${u.openartImages} images OpenArt (tes crédits)`);
+  if (u.falImages) usageParts.push(`🖼️ ${u.falImages} images fal.ai`);
+  if (u.pollinationsImages) usageParts.push(`🖼️ ${u.pollinationsImages} images Pollinations (gratuit)`);
+  if (u.elevenChars)
+    usageParts.push(
+      `🎙️ ${u.elevenChars.toLocaleString('fr-FR')} crédits ElevenLabs (${u.elevenClips} répliques)`,
+    );
+  if (u.edgeClips) usageParts.push(`🔊 ${u.edgeClips} répliques Edge (gratuit)`);
+  if (u.sayClips) usageParts.push(`🗣️ ${u.sayClips} répliques voix macOS (gratuit)`);
+  if (u.claudeCalls) usageParts.push(`🤖 ${u.claudeCalls} générations Claude (abonnement)`);
+  const usageBar =
+    usageParts.length > 0 ? (
+      <p className="usage-line" title="Consommation cumulée de ce drama depuis l'ajout du compteur">
+        💰 {usageParts.join(' · ')}
+      </p>
+    ) : null;
+
   if (stage === 'script_review') {
     return (
       <div className="page project">
         {header}
+        {usageBar}
         {jobBanner}
         <ScriptReview
           project={project}
@@ -472,6 +492,7 @@ export function ProjectView({ projectId, onBack }) {
     return (
       <div className="page project">
         {header}
+        {usageBar}
         {jobBanner}
         <CharactersReview
           project={project}
@@ -487,6 +508,7 @@ export function ProjectView({ projectId, onBack }) {
   return (
     <div className="page project">
       {header}
+      {usageBar}
 
       <nav className="episode-tabs">
         {Array.from({ length: EPISODE_COUNT }, (_, i) => i + 1).map((n) => {

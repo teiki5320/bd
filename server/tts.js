@@ -253,18 +253,20 @@ export function ttsInfo() {
 // Synthétise une réplique. Ordre en mode auto :
 //   ElevenLabs (si clé) → Edge TTS → voix macOS.
 // TTS_PROVIDER=elevenlabs | edge | say dans .env pour forcer un moteur.
-// Retourne { file (chemin complet), durationSec }.
+// Retourne { file (chemin complet), durationSec, engine, chars } — engine/chars
+// alimentent le compteur de consommation du projet.
 export async function synthesize({ text, edgeVoice, sayVoice, elevenVoice, outBase }) {
   const pref = (process.env.TTS_PROVIDER || 'auto').toLowerCase();
   const canSay = process.platform === 'darwin';
   const hasElevenKey = Boolean(process.env.ELEVENLABS_API_KEY);
+  const chars = text.length;
 
   // 1. ElevenLabs — qualité studio
   if (pref === 'elevenlabs' || (pref === 'auto' && hasElevenKey)) {
     try {
       const mp3 = `${outBase}.mp3`;
       const durationSec = await synthesizeEleven(text, elevenVoice, mp3);
-      return { file: mp3, durationSec };
+      return { file: mp3, durationSec, engine: 'elevenlabs', chars };
     } catch (e) {
       if (pref === 'elevenlabs') {
         throw e;
@@ -281,7 +283,7 @@ export async function synthesize({ text, edgeVoice, sayVoice, elevenVoice, outBa
     try {
       const mp3 = `${outBase}.mp3`;
       const durationSec = await synthesizeEdge(text, edgeVoice, mp3);
-      return { file: mp3, durationSec };
+      return { file: mp3, durationSec, engine: 'edge', chars };
     } catch (edgeErr) {
       edgeFailedAt = Date.now();
       if (!canSay || pref === 'edge') {
@@ -295,7 +297,7 @@ export async function synthesize({ text, edgeVoice, sayVoice, elevenVoice, outBa
     throw new Error('Aucune méthode de synthèse vocale disponible sur cette machine.');
   }
   const m4a = await synthesizeSay(text, sayVoice, outBase);
-  return { file: m4a, durationSec: await audioDurationSec(m4a) };
+  return { file: m4a, durationSec: await audioDurationSec(m4a), engine: 'say', chars };
 }
 
 export function voiceFor(project, speaker) {

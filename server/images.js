@@ -74,23 +74,24 @@ async function fal(prompt) {
 }
 
 // Génère une image et l'écrit dans outPath.
-// Retourne { ok, url } — url est renseignée par OpenArt (référence de visage), false/ok=false en mode manuel.
+// Retourne { ok, url, provider } — url est renseignée par OpenArt (référence de
+// visage), ok=false en mode manuel ; provider alimente le compteur de conso.
 export async function generateImage(
   prompt,
   outPath,
   { seed = Math.floor(Math.random() * 1e9), referenceUrls = [] } = {},
 ) {
   if (IMAGE_PROVIDER === 'manual') {
-    return { ok: false, url: null };
+    return { ok: false, url: null, provider: 'manual' };
   }
   if (IMAGE_PROVIDER === 'openart') {
     const { buffer, url } = await openartGenerate({ prompt, referenceUrls });
     fs.writeFileSync(outPath, buffer);
-    return { ok: true, url };
+    return { ok: true, url, provider: 'openart' };
   }
   const buf = await fetchWithRetry(() =>
     IMAGE_PROVIDER === 'fal' ? fal(prompt) : pollinations(prompt, seed),
   );
   fs.writeFileSync(outPath, buf);
-  return { ok: true, url: null };
+  return { ok: true, url: null, provider: IMAGE_PROVIDER };
 }
