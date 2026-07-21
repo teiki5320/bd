@@ -20,6 +20,42 @@ import { LINE_START_DELAY, LINE_GAP } from '../src/remotion/timing.js';
 
 const KEN_BURNS_CYCLE = ['zoom-in', 'pan-right', 'zoom-out', 'pan-left', 'zoom-in', 'pan-up'];
 
+// Compteur de consommation du projet (crédits/appels par service).
+export function ensureUsage(project) {
+  if (!project.usage) {
+    project.usage = {
+      claudeCalls: 0,
+      openartImages: 0,
+      pollinationsImages: 0,
+      falImages: 0,
+      elevenClips: 0,
+      elevenChars: 0,
+      edgeClips: 0,
+      sayClips: 0,
+    };
+  }
+  return project.usage;
+}
+
+function countImage(project, provider) {
+  const u = ensureUsage(project);
+  if (provider === 'openart') u.openartImages += 1;
+  else if (provider === 'fal') u.falImages += 1;
+  else if (provider === 'pollinations') u.pollinationsImages += 1;
+}
+
+function countVoice(project, result) {
+  const u = ensureUsage(project);
+  if (result.engine === 'elevenlabs') {
+    u.elevenClips += 1;
+    u.elevenChars += result.chars;
+  } else if (result.engine === 'edge') {
+    u.edgeClips += 1;
+  } else {
+    u.sayClips += 1;
+  }
+}
+
 const MIN_SCENE_SEC = 3.5;
 const MAX_SCENE_SEC = 16;
 
@@ -98,10 +134,11 @@ export async function ensureCharacterPortraits(project, update) {
       `Character reference portrait, waist-up, facing camera, neutral expression, ` +
       `plain warm background, soft natural light: ${c.visual}. ` +
       `Photorealistic, cinematic film still, 9:16 vertical.`;
-    const { ok, url } = await generateImage(prompt, path.join(dir, file), {});
+    const { ok, url, provider } = await generateImage(prompt, path.join(dir, file), {});
     if (ok) {
       c.portrait = file;
       c.portraitUrl = url;
+      countImage(project, provider);
     }
     saveProject(project);
   }
@@ -125,11 +162,12 @@ async function generateEpisodeAssets(project, episode, update) {
       update(`Épisode ${episode.number} — image ${i + 1}/${scenes.length}…`, i / scenes.length);
       const file = `e${episode.number}_${scene.id}_v${scene.version}.jpg`;
       try {
-        const { ok } = await generateImage(scene.imagePrompt, path.join(dir, file), {
+        const { ok, provider } = await generateImage(scene.imagePrompt, path.join(dir, file), {
           referenceUrls: sceneReferenceUrls(project, scene),
         });
         if (ok) {
           scene.image = file;
+          countImage(project, provider);
         }
       } catch (e) {
         console.error(`Image scène ${scene.id} :`, e.message);
@@ -150,13 +188,14 @@ async function generateEpisodeAssets(project, episode, update) {
       }
       const base = `e${episode.number}_${scene.id}_l${j}_v${scene.version}`;
       try {
-        const { file, durationSec } = await synthesize({
+        const result = await synthesize({
           text: line.text,
           ...voiceFor(project, line.speaker),
           outBase: path.join(dir, base),
         });
-        line.audio = path.basename(file);
-        line.audioDurationSec = durationSec;
+        line.audio = path.basename(result.file);
+        line.audioDurationSec = result.durationSec;
+        countVoice(project, result);
         delete line.audioError;
       } catch (e) {
         console.error(`Voix scène ${scene.id} ligne ${j} :`, e.message);
@@ -210,6 +249,7 @@ export async function createProject({ styles, theme }, update) {
     episodes: [],
     createdAt: new Date().toISOString(),
   };
+  ensureUsage(project).claudeCalls += 1;
 
   const ep1raw = data.episode1 || (Array.isArray(data.episodes) ? data.episodes[0] : null);
   if (!ep1raw) {
@@ -226,6 +266,7 @@ export async function createProject({ styles, theme }, update) {
 export async function regenerateScript(project, update) {
   update('Nouvelle écriture du scénario par Claude (1 à 3 minutes)…');
   const data = await askClaudeForJson(buildSeriesPrompt(project.styles, project.theme));
+  ensureUsage(project).claudeCalls += 1;
   project.title = data.title || project.title;
   project.logline = data.logline || '';
   project.setting = data.setting || '';
@@ -260,6 +301,7 @@ export async function produceEpisode(project, number, update) {
   if (!episode) {
     update(`Écriture du scénario de l'épisode ${number} par Claude…`);
     const raw = await askClaudeForJson(buildEpisodePrompt(project, number));
+    ensureUsage(project).claudeCalls += 1;
     episode = normalizeEpisode(raw, number);
     project.episodes.push(episode);
     project.episodes.sort((a, b) => a.number - b.number);
@@ -280,11 +322,12 @@ export async function regenerateAllImages(project, episode, update) {
     scene.version += 1;
     const file = `e${episode.number}_${scene.id}_v${scene.version}.jpg`;
     try {
-      const { ok } = await generateImage(scene.imagePrompt, path.join(dir, file), {
+      const { ok, provider } = await generateImage(scene.imagePrompt, path.join(dir, file), {
         referenceUrls: sceneReferenceUrls(project, scene),
       });
       if (ok) {
         scene.image = file;
+        countImage(project, provider);
         delete scene.imageError;
       }
     } catch (e) {
@@ -303,11 +346,14 @@ export async function regenerateSceneImage(project, episode, scene, update) {
   await ensureCharacterPortraits(project, update);
   scene.version += 1;
   const file = `e${episode.number}_${scene.id}_v${scene.version}.jpg`;
-  const { ok } = await generateImage(scene.imagePrompt, path.join(assetsDir(project.id), file), {
-    referenceUrls: sceneReferenceUrls(project, scene),
-  });
+  const { ok, provider } = await generateImage(
+    scene.imagePrompt,
+    path.join(assetsDir(project.id), file),
+    { referenceUrls: sceneReferenceUrls(project, scene) },
+  );
   if (ok) {
     scene.image = file;
+    countImage(project, provider);
     delete scene.imageError;
   }
   saveProject(project);
@@ -323,6 +369,7 @@ export async function newCharacterFace(project, characterId, instructions, updat
   }
   update(`Réécriture de ${c.name} par Claude…`);
   const data = await askClaudeForJson(buildNewFacePrompt(c, (instructions || '').slice(0, 300)));
+  ensureUsage(project).claudeCalls += 1;
   const newVisual = String(data.visual || '').trim();
   if (!newVisual) {
     throw new Error("Claude n'a pas fourni de nouvelle description.");
@@ -365,13 +412,15 @@ export async function characterVoicePreview(project, characterId, elevenVoiceOve
   const text = line || `Je m'appelle ${c.name}. ${c.role}.`;
   const v = voiceFor(project, characterId);
   const base = path.join(assetsDir(project.id), `preview_${characterId}_${Date.now()}`);
-  const { file } = await synthesize({
+  const result = await synthesize({
     text,
     ...v,
     elevenVoice: elevenVoiceOverride || v.elevenVoice,
     outBase: base,
   });
-  return path.basename(file);
+  countVoice(project, result);
+  saveProject(project);
+  return path.basename(result.file);
 }
 
 // Refait le portrait de référence d'un personnage (les scènes suivantes l'utiliseront).
@@ -398,13 +447,14 @@ export async function regenerateSceneAudio(project, episode, scene, update) {
     const line = scene.lines[j];
     update(`Voix ${j + 1}/${scene.lines.length}…`);
     const base = `e${episode.number}_${scene.id}_l${j}_v${scene.version}`;
-    const { file, durationSec } = await synthesize({
+    const result = await synthesize({
       text: line.text,
       ...voiceFor(project, line.speaker),
       outBase: path.join(assetsDir(project.id), base),
     });
-    line.audio = path.basename(file);
-    line.audioDurationSec = durationSec;
+    line.audio = path.basename(result.file);
+    line.audioDurationSec = result.durationSec;
+    countVoice(project, result);
     delete line.audioError;
   }
   recomputeSceneDuration(scene);

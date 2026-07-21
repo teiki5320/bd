@@ -364,6 +364,13 @@ code {
   font-size: 1.6rem;
 }
 
+.usage-line {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: -8px 0 16px;
+  line-height: 1.6;
+}
+
 .episode-tabs {
   display: flex;
   gap: 8px;
