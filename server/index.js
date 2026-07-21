@@ -36,6 +36,7 @@ import { renderEpisode } from './render.js';
 import { currentProvider } from './images.js';
 import { ttsInfo, elevenBalance } from './tts.js';
 import { openartCredits } from './openart.js';
+import { exportAllProjects, EXPORT_ROOT } from './exporter.js';
 
 const app = express();
 app.use(express.json({ limit: '60mb' }));
@@ -479,4 +480,11 @@ app.listen(PORT, '127.0.0.1', () => {
     console.log('  (interface non construite : lance `npm run dev` ou `npm run build`)');
   }
   console.log('');
+  // Synchronise les épisodes déjà validés vers Bureau/Dramas (rattrapage).
+  setTimeout(() => {
+    const copied = exportAllProjects();
+    if (copied > 0) {
+      console.log(`  📁 ${copied} épisode(s) synchronisé(s) dans ${EXPORT_ROOT}`);
+    }
+  }, 1500);
 });
