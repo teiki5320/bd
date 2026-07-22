@@ -56,6 +56,7 @@ export function listProjects() {
           title: p.title,
           logline: p.logline,
           styles: p.styles,
+          custom: Boolean(p.custom),
           stage: p.stage || 'production',
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
