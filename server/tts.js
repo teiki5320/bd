@@ -80,21 +80,30 @@ export function assignVoices(characters) {
 }
 
 // ---------- ElevenLabs (qualité studio, clé requise) ----------
+// Modèle par défaut : turbo v2.5 — il permet d'IMPOSER le français
+// (language_code), là où multilingual_v2 devine la langue et se trompe sur
+// les répliques courtes (accent anglais). Bonus : 2× moins de crédits.
 async function synthesizeEleven(text, voiceId, outPath) {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
     throw new Error('ELEVENLABS_API_KEY absente du .env');
+  }
+  const model = process.env.ELEVEN_MODEL || 'eleven_turbo_v2_5';
+  const body = {
+    text,
+    model_id: model,
+    voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35 },
+  };
+  // Seuls turbo/flash v2.5 acceptent language_code (rejeté par multilingual_v2).
+  if (/turbo_v2_5|flash_v2_5/.test(model)) {
+    body.language_code = 'fr';
   }
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
     {
       method: 'POST',
       headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35 },
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(120000),
     },
   );
@@ -326,13 +335,19 @@ export async function synthesize({ text, edgeVoice, sayVoice, elevenVoice, outBa
 }
 
 export function voiceFor(project, speaker) {
+  // Voix du narrateur : choisie par drama (project.narratorVoice), Daniel sinon.
+  const narrator = {
+    edgeVoice: NARRATOR_VOICE,
+    sayVoice: NARRATOR_SAY,
+    elevenVoice: isCatalogVoice(project.narratorVoice) ? project.narratorVoice : ELEVEN_NARRATOR,
+  };
   if (speaker === 'narrator') {
-    return { edgeVoice: NARRATOR_VOICE, sayVoice: NARRATOR_SAY, elevenVoice: ELEVEN_NARRATOR };
+    return narrator;
   }
   const c = (project.characters || []).find((x) => x.id === speaker);
   const female = c ? (c.gender || '').toLowerCase().startsWith('f') : false;
   if (!c) {
-    return { edgeVoice: NARRATOR_VOICE, sayVoice: NARRATOR_SAY, elevenVoice: ELEVEN_NARRATOR };
+    return narrator;
   }
   return {
     edgeVoice: c.voice || (female ? FEMALE_VOICES[0] : MALE_VOICES[0]),
