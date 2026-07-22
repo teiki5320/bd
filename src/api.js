@@ -16,6 +16,8 @@ export const api = {
   listProjects: () => request('/api/projects'),
   getProject: (id) => request(`/api/projects/${id}`),
   deleteProject: (id) => request(`/api/projects/${id}`, { method: 'DELETE' }),
+  patchProject: (id, patch) =>
+    request(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   createProject: (styles, theme) =>
     request('/api/projects', { method: 'POST', body: JSON.stringify({ styles, theme }) }),
   createCustomProject: (answers) =>
