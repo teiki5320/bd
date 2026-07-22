@@ -9,6 +9,7 @@ import {
   videoSceneIndexes,
   DEFAULT_VIDEO_SCENES,
   MAX_VIDEO_SCENES,
+  tiktokCaption,
 } from '../shared/catalog.js';
 import './studio-redesign.css';
 
@@ -896,8 +897,8 @@ export function ProjectView({ projectId, onBack }) {
             <a
               className="btn-small"
               href={`/files/${project.id}/${episode.renderedFile}`}
-              download={`${project.title} - episode ${episode.number}.mp4`}
-              title="Télécharge une copie dans le dossier Téléchargements de Safari"
+              download={`${tiktokCaption(project, episode)}.mp4`}
+              title="Télécharge une copie dans le dossier Téléchargements de Safari — le nom du fichier = ta description TikTok"
             >
               ⬇️ Télécharger une copie
             </a>
@@ -941,7 +942,8 @@ export function ProjectView({ projectId, onBack }) {
         <a
           className="btn-ghost"
           href={`/files/${project.id}/${episode.renderedFile}`}
-          download={`${project.title} - episode ${episode.number}.mp4`}
+          download={`${tiktokCaption(project, episode)}.mp4`}
+          title="Le nom du fichier = titre + hashtags, prêt pour la description TikTok"
         >
           ⬇️ Télécharger l'épisode {episode.number}
         </a>
@@ -990,8 +992,8 @@ export function ProjectView({ projectId, onBack }) {
                 key={e.number}
                 className="dl-chip"
                 href={`/files/${project.id}/${e.renderedFile}`}
-                download={`${project.title} - episode ${e.number}.mp4`}
-                title={e.title}
+                download={`${tiktokCaption(project, e)}.mp4`}
+                title={`${e.title} — nom du fichier = description TikTok prête`}
               >
                 Ép. {e.number}
               </a>
@@ -1013,6 +1015,19 @@ export function ProjectView({ projectId, onBack }) {
             <button className="btn-small" onClick={openFolder} title="Ouvrir dans le Finder">
               📂 Ouvrir
             </button>
+          </p>
+          <p className="downloads-hint">
+            🏷️ Le nom de chaque fichier = <strong>titre + hashtags</strong> : TikTok pré-remplit
+            la description à l'import.{' '}
+            {episode && (
+              <button
+                className="btn-small"
+                title={tiktokCaption(project, episode)}
+                onClick={() => navigator.clipboard.writeText(tiktokCaption(project, episode))}
+              >
+                📋 Copier la description de l'ép. {episode.number}
+              </button>
+            )}
           </p>
         </div>
       )}

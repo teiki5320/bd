@@ -72,6 +72,52 @@ export function videoSceneIndexes(sceneCount, count = DEFAULT_VIDEO_SCENES) {
   return [...set].sort((a, b) => a - b);
 }
 
+// ---------- Légende TikTok (titre + hashtags) ----------
+// Le nom du fichier MP4 exporté = cette légende : TikTok pré-remplit la
+// description avec le nom du fichier, il n'y a plus qu'à publier.
+
+function tagSlug(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/œ/g, 'oe')
+    .replace(/æ/g, 'ae')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+export function tiktokHashtags(project) {
+  const tags = [];
+  const push = (t) => {
+    const v = tagSlug(t);
+    if (v && v.length > 1 && !tags.includes(v)) {
+      tags.push(v);
+    }
+  };
+  // 1. Hashtags proposés par Claude à l'écriture de la série (s'ils existent)
+  for (const t of project.hashtags || []) {
+    push(t);
+  }
+  // 2. Le titre de la série + ses styles
+  push(project.title);
+  for (const id of project.styles || []) {
+    const st = STYLES.find((x) => x.id === id);
+    if (st) {
+      push(st.label);
+    }
+  }
+  // 3. Le socle qui marche pour tous les micro-dramas
+  for (const t of ['drama', 'dramaafricain', 'serieafricaine', 'miniserie', 'storytime', 'pourtoi', 'fyp', 'afrique']) {
+    push(t);
+  }
+  return tags.slice(0, 12).map((t) => `#${t}`);
+}
+
+export function tiktokCaption(project, episode) {
+  const title = episode.title ? ` — ${episode.title}` : '';
+  return `Épisode ${episode.number}${title} ${tiktokHashtags(project).join(' ')}`;
+}
+
 export const SPEAKER_COLORS = [
   '#f2c14e',
   '#e07a5f',
