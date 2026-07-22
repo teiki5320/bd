@@ -199,6 +199,7 @@ function buildVideoInstruction({ prompt, imageUrl, referenceUrls, durationSec })
 - Format : vertical 9:16 (par exemple 1080x1920).
 - Durée cible : ${durationSec} secondes (choisis la durée disponible la plus proche).${source}
 - Choisis un modèle vidéo de qualité qui accepte une image de référence (Kling, Seedance, PixVerse, Wan ou équivalent disponible) ; à qualité comparable, prends le moins cher en crédits.
+- RÈGLE ABSOLUE : personne ne parle dans le clip. Bouches FERMÉES et immobiles, aucun mouvement de lèvres (la voix off est ajoutée séparément, sans synchronisation labiale). Reformule le prompt si nécessaire pour que le modèle le respecte.
 Attends la fin de la génération — cela peut prendre plusieurs minutes, patiente et vérifie le statut si nécessaire. Puis réponds UNIQUEMENT avec l'URL directe du fichier vidéo généré (.mp4, une seule ligne, aucune autre phrase). Si la génération échoue, réponds "ERREUR: " suivi de la cause exacte.`;
 }
 
