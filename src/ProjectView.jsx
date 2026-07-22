@@ -233,6 +233,92 @@ function CharactersReview({ project, busy, runJob, onValidate, projectId }) {
   );
 }
 
+// Puce de casting dans l'atelier : portrait + voix modifiable + pré-écoute.
+// c = personnage, ou null pour le narrateur (voix stockée sur le projet).
+function VoiceChip({ project, projectId, c, busy, runJob, onRefresh }) {
+  const isNarrator = !c;
+  const current = isNarrator
+    ? project.narratorVoice || 'onwK4e9ZLuTAKqWW03F9'
+    : c.elevenVoice || '';
+  const [listening, setListening] = useState(false);
+
+  const options = isNarrator
+    ? VOICES
+    : VOICES.filter((v) => v.gender === (c.gender || 'homme') || v.id === current);
+
+  const change = async (voiceId) => {
+    try {
+      if (isNarrator) {
+        await api.patchProject(projectId, { narratorVoice: voiceId });
+      } else {
+        await api.patchCharacter(projectId, c.id, { elevenVoice: voiceId });
+      }
+      onRefresh();
+    } catch (e) {
+      alert(`Changement de voix impossible : ${e.message}`);
+    }
+  };
+
+  const listen = async () => {
+    setListening(true);
+    try {
+      const { file } = await api.voicePreview(projectId, isNarrator ? 'narrator' : c.id, current);
+      await new Audio(`/files/${projectId}/${file}`).play();
+    } catch (e) {
+      alert(`Pré-écoute impossible : ${e.message}`);
+    } finally {
+      setListening(false);
+    }
+  };
+
+  return (
+    <div className="cast-chip">
+      <div className="cast-head" title={isNarrator ? 'Voix off du narrateur' : `${c.role} — ${c.visual}`}>
+        {isNarrator ? (
+          <div className="char-ph">🎙️</div>
+        ) : c.portrait ? (
+          <img src={`/files/${projectId}/${c.portrait}`} alt={c.name} />
+        ) : (
+          <div className="char-ph">👤</div>
+        )}
+        <span style={isNarrator ? undefined : { color: c.color }}>
+          {isNarrator ? 'Narrateur' : c.name}
+        </span>
+        <button
+          className="btn-small"
+          disabled={listening}
+          title="Écouter cette voix avec une vraie réplique"
+          onClick={listen}
+        >
+          {listening ? '⏳' : '▶️'}
+        </button>
+        {!isNarrator && (
+          <button
+            className="btn-small"
+            disabled={busy}
+            title="Régénérer le portrait de référence (visages constants, OpenArt)"
+            onClick={() => runJob(() => api.regenPortrait(projectId, c.id))}
+          >
+            🔄
+          </button>
+        )}
+      </div>
+      <select
+        value={current}
+        disabled={busy}
+        title="Changer la voix — puis régénère les voix des scènes pour l'appliquer"
+        onChange={(e) => change(e.target.value)}
+      >
+        {options.map((v) => (
+          <option key={v.id} value={v.id}>
+            🎙️ {v.name} — {v.desc}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function SceneCard({ project, episode, scene, index, isAutoVideo, busy, runJob, onRefresh }) {
   const [lines, setLines] = useState(scene.lines);
   const [prompt, setPrompt] = useState(scene.imagePrompt);
@@ -402,6 +488,12 @@ function SceneCard({ project, episode, scene, index, isAutoVideo, busy, runJob, 
       </div>
       {scene.imageError && <p className="error small">Image : {scene.imageError}</p>}
       {scene.videoError && <p className="error small">Vidéo : {scene.videoError}</p>}
+      {scene.lines.some((l) => l.audioFallback) && (
+        <p className="error small">
+          ⚠️ Voix de secours utilisée (ElevenLabs indisponible — crédits épuisés ?). Régénère la
+          voix de cette scène une fois le solde revenu.
+        </p>
+      )}
       {scene.lines.some((l) => l.audioError) && (
         <p className="error small">Voix : {scene.lines.find((l) => l.audioError).audioError}</p>
       )}
@@ -941,25 +1033,30 @@ export function ProjectView({ projectId, onBack }) {
           {/* Colonne scènes : le seul élément qui défile */}
           <section className="studio-scenes scenes-column">
             <div className="char-strip">
+              <VoiceChip
+                project={project}
+                projectId={projectId}
+                c={null}
+                busy={busy}
+                runJob={runJob}
+                onRefresh={refresh}
+              />
               {project.characters.map((c) => (
-                <div key={c.id} className="char-chip" title={`${c.role} — ${c.visual}`}>
-                  {c.portrait ? (
-                    <img src={`/files/${project.id}/${c.portrait}`} alt={c.name} />
-                  ) : (
-                    <div className="char-ph">👤</div>
-                  )}
-                  <span style={{ color: c.color }}>{c.name}</span>
-                  <button
-                    className="btn-small"
-                    disabled={busy}
-                    title="Régénérer le portrait de référence (visages constants, OpenArt)"
-                    onClick={() => runJob(() => api.regenPortrait(projectId, c.id))}
-                  >
-                    🔄
-                  </button>
-                </div>
+                <VoiceChip
+                  key={c.id}
+                  project={project}
+                  projectId={projectId}
+                  c={c}
+                  busy={busy}
+                  runJob={runJob}
+                  onRefresh={refresh}
+                />
               ))}
             </div>
+            <p className="cast-hint">
+              🎙️ Change une voix ici (▶️ pour l'écouter), puis clique « 🔊 Régénérer la voix » sur
+              une scène — ou « 🔊 Générer toutes les voix » — pour l'appliquer.
+            </p>
             <h2>
               Épisode {episode.number} — {episode.title}
             </h2>

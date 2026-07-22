@@ -209,6 +209,12 @@ async function generateEpisodeAssets(project, episode, update) {
         });
         line.audio = path.basename(result.file);
         line.audioDurationSec = result.durationSec;
+        line.audioEngine = result.engine;
+        // ElevenLabs attendu mais moteur de secours utilisé (crédits épuisés ?)
+        line.audioFallback =
+          Boolean(process.env.ELEVENLABS_API_KEY) && result.engine !== 'elevenlabs'
+            ? true
+            : undefined;
         countVoice(project, result);
         delete line.audioError;
       } catch (e) {
@@ -597,10 +603,11 @@ export async function newCharacterFace(project, characterId, instructions, updat
   await ensureCharacterPortraits(project, update);
 }
 
-// Extrait audio de pré-écoute d'une voix pour un personnage (réplique réelle si possible).
+// Extrait audio de pré-écoute d'une voix pour un personnage ou le narrateur
+// (réplique réelle si possible).
 export async function characterVoicePreview(project, characterId, elevenVoiceOverride) {
   const c = (project.characters || []).find((x) => x.id === characterId);
-  if (!c) {
+  if (!c && characterId !== 'narrator') {
     throw new Error('Personnage introuvable');
   }
   let line = null;
@@ -614,7 +621,9 @@ export async function characterVoicePreview(project, characterId, elevenVoiceOve
     }
     if (line) break;
   }
-  const text = line || `Je m'appelle ${c.name}. ${c.role}.`;
+  const text =
+    line ||
+    (c ? `Je m'appelle ${c.name}. ${c.role}.` : `${project.title}. L'histoire commence ce soir.`);
   const v = voiceFor(project, characterId);
   const base = path.join(assetsDir(project.id), `preview_${characterId}_${Date.now()}`);
   const result = await synthesize({
@@ -659,6 +668,11 @@ export async function regenerateSceneAudio(project, episode, scene, update) {
     });
     line.audio = path.basename(result.file);
     line.audioDurationSec = result.durationSec;
+    line.audioEngine = result.engine;
+    line.audioFallback =
+      Boolean(process.env.ELEVENLABS_API_KEY) && result.engine !== 'elevenlabs'
+        ? true
+        : undefined;
     countVoice(project, result);
     delete line.audioError;
   }

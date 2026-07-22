@@ -37,7 +37,7 @@ import {
 } from './pipeline.js';
 import { renderEpisode } from './render.js';
 import { currentProvider } from './images.js';
-import { ttsInfo, elevenBalance } from './tts.js';
+import { ttsInfo, elevenBalance, isCatalogVoice } from './tts.js';
 import { openartCredits } from './openart.js';
 import { exportAllProjects, EXPORT_ROOT, projectExportDir } from './exporter.js';
 import {
@@ -196,6 +196,13 @@ app.patch('/api/projects/:id', (req, res) => {
       return;
     }
     p.videoScenes = v;
+  }
+  if (req.body.narratorVoice !== undefined) {
+    if (!isCatalogVoice(req.body.narratorVoice)) {
+      res.status(400).json({ error: 'Voix du narrateur inconnue.' });
+      return;
+    }
+    p.narratorVoice = req.body.narratorVoice;
   }
   saveProject(p);
   res.json(p);
