@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { execFile } from 'node:child_process';
 import { PORT, DIST_DIR } from './config.js';
-import { EPISODE_COUNT } from '../shared/catalog.js';
+import { EPISODE_COUNT, STYLES, MAX_STYLES } from '../shared/catalog.js';
 import {
   listProjects,
   loadProject,
@@ -18,6 +18,7 @@ import {
 import { startJob, getJob, activeJobFor } from './jobs.js';
 import {
   createProject,
+  createCustomProject,
   produceEpisode,
   produceSeason,
   regenerateScript,
@@ -86,6 +87,32 @@ app.post('/api/projects', (req, res) => {
   }
   const job = startJob('Création du drama', (update) =>
     createProject({ styles, theme: (theme || '').slice(0, 500) }, update),
+  );
+  res.json({ jobId: job.id });
+});
+
+// Mode « mon script » : l'auteur fournit son histoire via le formulaire guidé.
+app.post('/api/projects/custom', (req, res) => {
+  const b = req.body || {};
+  const script = String(b.script || '').trim();
+  if (script.length < 30) {
+    res.status(400).json({
+      error: 'Raconte ton histoire (au moins quelques phrases) — c\'est la base de tout le drama.',
+    });
+    return;
+  }
+  const validStyle = (s) => STYLES.some((x) => x.id === s);
+  const answers = {
+    script: script.slice(0, 20000),
+    title: String(b.title || '').trim().slice(0, 120),
+    setting: String(b.setting || '').trim().slice(0, 300),
+    charactersText: String(b.charactersText || '').trim().slice(0, 2000),
+    styles: (Array.isArray(b.styles) ? b.styles : []).filter(validStyle).slice(0, MAX_STYLES),
+    mustHappen: String(b.mustHappen || '').trim().slice(0, 1000),
+    fidelity: b.fidelity === 'libre' ? 'libre' : 'fidele',
+  };
+  const job = startJob('Création depuis ton script', (update) =>
+    createCustomProject(answers, update),
   );
   res.json({ jobId: job.id });
 });

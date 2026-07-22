@@ -7,6 +7,7 @@ import { renderEpisode } from './render.js';
 import {
   askClaudeForJson,
   buildSeriesPrompt,
+  buildCustomSeriesPrompt,
   buildEpisodePrompt,
   buildNewFacePrompt,
 } from './claudegen.js';
@@ -294,14 +295,8 @@ export function removeSceneVideo(project, episode, scene) {
   saveProject(project);
 }
 
-export async function createProject({ styles, theme }, update) {
-  update('Écriture du scénario par Claude (1 à 3 minutes)…');
-  const data = await askClaudeForJson(buildSeriesPrompt(styles, theme));
-
-  const id = newId();
-  createProjectDirs(id);
-
-  const characters = assignVoices(
+function mapCharacters(data) {
+  return assignVoices(
     (data.characters || []).map((c, i) => ({
       id: c.id || `perso${i + 1}`,
       name: c.name || `Personnage ${i + 1}`,
@@ -314,6 +309,14 @@ export async function createProject({ styles, theme }, update) {
       color: SPEAKER_COLORS[i % SPEAKER_COLORS.length],
     })),
   );
+}
+
+export async function createProject({ styles, theme }, update) {
+  update('Écriture du scénario par Claude (1 à 3 minutes)…');
+  const data = await askClaudeForJson(buildSeriesPrompt(styles, theme));
+
+  const id = newId();
+  createProjectDirs(id);
 
   const project = {
     id,
@@ -322,7 +325,7 @@ export async function createProject({ styles, theme }, update) {
     setting: data.setting || '',
     styles,
     theme: theme || '',
-    characters,
+    characters: mapCharacters(data),
     episodeSummaries: (data.episodeSummaries || []).map((s, i) => ({
       number: s.number || i + 1,
       title: s.title || `Épisode ${i + 1}`,
@@ -345,26 +348,66 @@ export async function createProject({ styles, theme }, update) {
   return { projectId: id };
 }
 
-// Réécrit entièrement la série (mêmes styles/thème) tant que le scénario n'est pas validé.
+// Mode « mon script » : l'auteur fournit son histoire via le formulaire guidé ;
+// Claude la structure fidèlement dans le même format que les séries générées.
+export async function createCustomProject(answers, update) {
+  update("Mise en forme de ton script par Claude (1 à 3 minutes)…");
+  const data = await askClaudeForJson(buildCustomSeriesPrompt(answers));
+
+  const id = newId();
+  createProjectDirs(id);
+
+  const project = {
+    id,
+    title: answers.title || data.title || 'Drama sans titre',
+    logline: data.logline || '',
+    setting: answers.setting || data.setting || '',
+    styles: answers.styles || [],
+    theme: '',
+    custom: true,
+    // Conservé pour régénérer le scénario et garder les épisodes 2 à 10 fidèles.
+    customAnswers: answers,
+    source: {
+      script: answers.script,
+      mustHappen: answers.mustHappen || '',
+      fidelity: answers.fidelity || 'fidele',
+    },
+    characters: mapCharacters(data),
+    episodeSummaries: (data.episodeSummaries || []).map((s, i) => ({
+      number: s.number || i + 1,
+      title: s.title || `Épisode ${i + 1}`,
+      summary: s.summary || '',
+    })),
+    musicFile: null,
+    episodes: [],
+    createdAt: new Date().toISOString(),
+  };
+  ensureUsage(project).claudeCalls += 1;
+
+  const ep1raw = data.episode1 || (Array.isArray(data.episodes) ? data.episodes[0] : null);
+  if (!ep1raw) {
+    throw new Error("Claude n'a pas fourni l'épisode 1.");
+  }
+  project.episodes.push(normalizeEpisode(ep1raw, 1));
+  project.stage = 'script_review';
+  saveProject(project);
+  return { projectId: id };
+}
+
+// Réécrit entièrement la série (mêmes styles/thème — ou même script source
+// pour un drama en mode « mon script ») tant que le scénario n'est pas validé.
 export async function regenerateScript(project, update) {
   update('Nouvelle écriture du scénario par Claude (1 à 3 minutes)…');
-  const data = await askClaudeForJson(buildSeriesPrompt(project.styles, project.theme));
-  ensureUsage(project).claudeCalls += 1;
-  project.title = data.title || project.title;
-  project.logline = data.logline || '';
-  project.setting = data.setting || '';
-  project.characters = assignVoices(
-    (data.characters || []).map((c, i) => ({
-      id: c.id || `perso${i + 1}`,
-      name: c.name || `Personnage ${i + 1}`,
-      gender: c.gender || 'homme',
-      age: c.age || 30,
-      role: c.role || '',
-      visual: c.visual || '',
-      elevenVoice: isCatalogVoice(c.voice) ? c.voice : undefined,
-      color: SPEAKER_COLORS[i % SPEAKER_COLORS.length],
-    })),
+  const data = await askClaudeForJson(
+    project.customAnswers
+      ? buildCustomSeriesPrompt(project.customAnswers)
+      : buildSeriesPrompt(project.styles, project.theme),
   );
+  ensureUsage(project).claudeCalls += 1;
+  project.title = (project.customAnswers && project.customAnswers.title) || data.title || project.title;
+  project.logline = data.logline || '';
+  project.setting = (project.customAnswers && project.customAnswers.setting) || data.setting || '';
+  project.characters = mapCharacters(data);
   project.episodeSummaries = (data.episodeSummaries || []).map((s, i) => ({
     number: s.number || i + 1,
     title: s.title || `Épisode ${i + 1}`,

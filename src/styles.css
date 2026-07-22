@@ -177,6 +177,53 @@ code {
   border-color: var(--gold-dim);
 }
 
+/* ---------- Mode « mon script » (formulaire guidé) ---------- */
+
+.create-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.custom-form .form-field {
+  margin: 22px 0;
+}
+
+.custom-form .form-field > label {
+  display: block;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 2px 0 8px;
+}
+
+.custom-form textarea,
+.custom-form input,
+.custom-form select {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.98rem;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+}
+
+.custom-form textarea:focus,
+.custom-form input:focus,
+.custom-form select:focus {
+  border-color: var(--gold-dim);
+}
+
 .btn-primary {
   background: var(--gold);
   color: #1a1508;
