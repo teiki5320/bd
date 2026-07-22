@@ -101,6 +101,7 @@ const SERIES_SCHEMA = `{
     "voice": "CASTING VOCAL : l'id EXACT de la voix la plus adaptée au genre, à l'âge et à la personnalité du personnage, choisie dans ce catalogue : ${VOICE_CATALOG}"
   }],
   "episodeSummaries": [${EPISODE_COUNT} éléments : {"number": n, "title": "titre", "summary": "résumé en 2 phrases avec le cliffhanger"}],
+  "hashtags": [10 hashtags TikTok en minuscules SANS le symbole # : 4 génériques à gros volume (drama, pourtoi, storytime…) + 6 propres à la série (lieu, thème, métier, émotion)],
   "episode1": {
     "number": 1,
     "title": "titre de l'épisode 1",

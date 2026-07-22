@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { projectDir, listProjects, loadProject } from './projects.js';
+import { tiktokCaption } from '../shared/catalog.js';
 
 // Dossier d'export des épisodes validés : Bureau/Dramas/<Titre du drama>/
 // EXPORT_DIR dans .env pour changer, avec le raccourci EXPORT_DIR=icloud
@@ -43,6 +44,17 @@ export function projectExportDir(project) {
   return path.join(exportRootFor(project), sanitizeName(project.title));
 }
 
+// Nom de fichier = légende TikTok (titre + hashtags) : TikTok pré-remplit la
+// description avec le nom du fichier au moment de la publication.
+function episodeFileName(project, episode) {
+  const caption = tiktokCaption(project, episode)
+    .replace(/[\/\\:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+  return `${caption}.mp4`;
+}
+
 // Copie le MP4 d'un épisode validé vers le dossier du drama sur le Bureau.
 // Ne lève jamais : l'export ne doit pas faire échouer un rendu.
 export function exportEpisode(project, episode) {
@@ -56,10 +68,16 @@ export function exportEpisode(project, episode) {
     }
     const dir = projectExportDir(project);
     fs.mkdirSync(dir, { recursive: true });
-    const name = `Episode ${String(episode.number).padStart(2, '0')}${
-      episode.title ? ` - ${sanitizeName(episode.title)}` : ''
-    }.mp4`;
-    const dest = path.join(dir, name);
+    // Supprime les anciens exports de CET épisode (ancien nom « Episode NN - … »
+    // ou légende différente) pour éviter les doublons après renommage.
+    const oldPrefix = `Episode ${String(episode.number).padStart(2, '0')}`;
+    const newPrefix = `Épisode ${episode.number} `;
+    for (const f of fs.readdirSync(dir)) {
+      if (f.endsWith('.mp4') && (f.startsWith(oldPrefix) || f.startsWith(newPrefix))) {
+        fs.rmSync(path.join(dir, f), { force: true });
+      }
+    }
+    const dest = path.join(dir, episodeFileName(project, episode));
     fs.copyFileSync(src, dest);
     return dest;
   } catch (e) {
