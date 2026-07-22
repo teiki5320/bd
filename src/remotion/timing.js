@@ -4,7 +4,8 @@ export const FPS = 30;
 export const WIDTH = 1080;
 export const HEIGHT = 1920;
 export const TRANSITION_FRAMES = 12;
-export const OUTRO_SECONDS = 2.6;
+// Carton « À suivre » : assez long pour lire le cliffhanger tranquillement.
+export const OUTRO_SECONDS = 5.5;
 
 export const LINE_START_DELAY = 0.5; // secondes avant la première réplique d'une scène
 export const LINE_GAP = 0.35; // pause entre deux répliques
@@ -24,7 +25,15 @@ export function lineOffsets(scene) {
   return offsets;
 }
 
-export function episodeDurationInFrames(episode) {
+// Durée (frames) de l'outro personnel de l'auteur (vidéo ou image de marque).
+export function outroClipFrames(studio) {
+  if (!studio || !studio.outro) {
+    return 0;
+  }
+  return Math.max(FPS, Math.round((studio.outroDurationSec || 4) * FPS));
+}
+
+export function episodeDurationInFrames(episode, studio) {
   const scenes = episode?.scenes || [];
   if (scenes.length === 0) {
     return FPS * 3;
@@ -34,5 +43,6 @@ export function episodeDurationInFrames(episode) {
   // TransitionSeries : les fondus se superposent, la durée totale est donc
   // la somme des séquences moins un fondu par coupe (scènes + carton de fin).
   const cuts = scenes.length; // scènes-1 coupes internes + 1 coupe vers l'outro
-  return scenesTotal + outro - TRANSITION_FRAMES * cuts;
+  const clip = outroClipFrames(studio);
+  return scenesTotal + outro - TRANSITION_FRAMES * cuts + (clip ? clip - TRANSITION_FRAMES : 0);
 }

@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://127.0.0.1:4600',
       '/files': 'http://127.0.0.1:4600',
+      '/studio': 'http://127.0.0.1:4600',
     },
   },
   build: {

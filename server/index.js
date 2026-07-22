@@ -40,6 +40,14 @@ import { currentProvider } from './images.js';
 import { ttsInfo, elevenBalance } from './tts.js';
 import { openartCredits } from './openart.js';
 import { exportAllProjects, EXPORT_ROOT } from './exporter.js';
+import {
+  STUDIO_DIR,
+  loadStudio,
+  saveSticker,
+  removeSticker,
+  saveOutro,
+  removeOutro,
+} from './studio.js';
 
 const app = express();
 app.use(express.json({ limit: '60mb' }));
@@ -72,6 +80,49 @@ app.get('/api/credits', async (req, res) => {
   ]);
   creditsCache = { at: Date.now(), data: { elevenlabs, openart } };
   res.json(creditsCache.data);
+});
+
+// ---------- Ma marque (sticker + outro, communs à tous les dramas) ----------
+app.get('/api/studio', (req, res) => {
+  res.json(loadStudio());
+});
+
+app.post('/api/studio/sticker', (req, res) => {
+  try {
+    res.json(saveSticker(req.body.data || ''));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete('/api/studio/sticker', (req, res) => {
+  res.json(removeSticker());
+});
+
+app.post('/api/studio/outro', async (req, res) => {
+  try {
+    res.json(await saveOutro(req.body.data || ''));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete('/api/studio/outro', (req, res) => {
+  res.json(removeOutro());
+});
+
+// Fichiers du studio (sticker/outro) — servis au Player et au rendu Remotion.
+app.get('/studio/:file', (req, res) => {
+  const target = path.resolve(STUDIO_DIR, req.params.file);
+  if (!target.startsWith(path.resolve(STUDIO_DIR) + path.sep)) {
+    res.status(403).end();
+    return;
+  }
+  if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+    res.status(404).end();
+    return;
+  }
+  res.sendFile(target);
 });
 
 // ---------- Projets ----------

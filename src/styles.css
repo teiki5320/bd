@@ -177,6 +177,65 @@ code {
   border-color: var(--gold-dim);
 }
 
+/* ---------- Ma marque (sticker + outro) ---------- */
+
+.brand-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 24px;
+  margin-bottom: 40px;
+}
+
+.brand-card summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.brand-hint {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.85rem;
+  margin-left: 10px;
+}
+
+.brand-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.brand-item strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.brand-preview {
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+  background: #0d0b07;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.brand-preview.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.brand-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* ---------- Mode « mon script » (formulaire guidé) ---------- */
 
 .create-actions {
@@ -424,13 +483,85 @@ code {
   font-size: 0.78rem;
   letter-spacing: 2px;
   text-transform: uppercase;
+}
+
+.usage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.usage-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.usage-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.usage-name {
+  color: var(--muted);
+  font-size: 0.8rem;
   margin-bottom: 6px;
 }
 
-.usage-row {
+.usage-big {
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.usage-big small {
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.usage-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 4px;
+}
+
+.usage-sub {
   color: var(--text);
-  font-size: 0.85rem;
-  line-height: 1.7;
+  font-size: 0.82rem;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.usage-free {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 10px;
+}
+
+.gauge {
+  height: 8px;
+  background: #0d0b07;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.gauge-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8a6f1f, var(--gold));
+  border-radius: 999px;
+}
+
+.gauge-fill.low {
+  background: var(--danger);
 }
 
 .episode-tabs {

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 projects/
+studio/
 .env
 .DS_Store
 *.log

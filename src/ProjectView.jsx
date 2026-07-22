@@ -396,6 +396,7 @@ export function ProjectView({ projectId, onBack }) {
   const [error, setError] = useState(null);
   const [playerKey, setPlayerKey] = useState(0);
   const [credits, setCredits] = useState(null);
+  const [studio, setStudio] = useState(null);
 
   const loadCredits = () => api.credits().then(setCredits).catch(() => {});
 
@@ -409,6 +410,7 @@ export function ProjectView({ projectId, onBack }) {
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
     loadCredits();
+    api.getStudio().then(setStudio).catch(() => {});
     // Raccroche une production en cours (après un rechargement de la page)
     api
       .activeJob(projectId)
@@ -438,8 +440,8 @@ export function ProjectView({ projectId, onBack }) {
   );
 
   const duration = useMemo(
-    () => (episode ? episodeDurationInFrames(episode) : FPS * 3),
-    [episode],
+    () => (episode ? episodeDurationInFrames(episode, studio) : FPS * 3),
+    [episode, studio],
   );
 
   const runJob = async (kickoff) => {
@@ -541,67 +543,81 @@ export function ProjectView({ projectId, onBack }) {
 
   const u = project.usage || {};
   const fr = (n) => Number(n || 0).toLocaleString('fr-FR');
-  const usageRows = [];
+  const oa = credits?.openart;
+  const el = credits?.elevenlabs;
+  const elRest = el && el.limit != null ? Math.max(0, el.limit - el.used) : null;
+  const elPct = elRest != null && el.limit > 0 ? Math.round((elRest / el.limit) * 100) : null;
+  const elReset = el?.resetAt
+    ? new Date(el.resetAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+    : null;
 
-  // Images
-  {
-    const el = credits?.openart;
-    let balance = '';
-    if (el && el.credits != null) {
-      balance = ` · solde du compte : ${fr(el.credits)} crédits restants`;
-    } else if (el && el.error) {
-      balance = ` · solde indisponible (${el.error})`;
-    }
-    if (u.openartImages || u.openartVideos || balance) {
-      const videos = u.openartVideos ? ` + ${fr(u.openartVideos)} clips vidéo` : '';
-      usageRows.push(
-        `🎨 OpenArt — ${fr(u.openartImages)} images${videos} générés pour ce drama${balance}`,
-      );
-    }
-    if (u.falImages) usageRows.push(`🖼️ fal.ai — ${fr(u.falImages)} images`);
-    if (u.pollinationsImages)
-      usageRows.push(`🖼️ Pollinations — ${fr(u.pollinationsImages)} images (gratuit)`);
-  }
+  const freeBits = [];
+  if (u.pollinationsImages) freeBits.push(`${fr(u.pollinationsImages)} images Pollinations`);
+  if (u.falImages) freeBits.push(`${fr(u.falImages)} images fal.ai`);
+  if (u.edgeClips) freeBits.push(`${fr(u.edgeClips)} répliques Edge TTS`);
+  if (u.sayClips) freeBits.push(`${fr(u.sayClips)} répliques voix macOS`);
 
-  // Voix
-  {
-    const el = credits?.elevenlabs;
-    let balance = '';
-    if (el && el.limit != null) {
-      const rest = Math.max(0, el.limit - el.used);
-      const reset = el.resetAt
-        ? ` — recharge le ${new Date(el.resetAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
-        : '';
-      balance = ` · solde du compte : ${fr(rest)} / ${fr(el.limit)} crédits restants${reset}`;
-    } else if (el && el.error === 'permission') {
-      balance = ' · solde masqué → ajoute la permission « User → Read » à ta clé ElevenLabs';
-    } else if (el && el.error) {
-      balance = ` · solde indisponible (${el.error})`;
-    }
-    if (u.elevenChars || balance) {
-      usageRows.push(
-        `🎙️ ElevenLabs — ${fr(u.elevenChars)} crédits utilisés par ce drama (${fr(u.elevenClips)} répliques)${balance}`,
-      );
-    }
-    if (u.edgeClips) usageRows.push(`🔊 Edge TTS — ${fr(u.edgeClips)} répliques (gratuit)`);
-    if (u.sayClips) usageRows.push(`🗣️ Voix macOS — ${fr(u.sayClips)} répliques (gratuit)`);
-  }
-
-  if (u.claudeCalls) {
-    usageRows.push(`🤖 Claude — ${fr(u.claudeCalls)} générations de scénario (abonnement, sans surcoût)`);
-  }
-
-  const usageBar =
-    usageRows.length > 0 ? (
-      <div className="usage-panel">
-        <div className="usage-title">💰 Consommation</div>
-        {usageRows.map((row, i) => (
-          <div key={i} className="usage-row">
-            {row}
-          </div>
-        ))}
+  const usageBar = (
+    <div className="usage-panel">
+      <div className="usage-head">
+        <span className="usage-title">💰 Coûts</span>
+        <button className="btn-small" title="Actualiser les soldes des comptes" onClick={loadCredits}>
+          ↻ Actualiser
+        </button>
       </div>
-    ) : null;
+      <div className="usage-cards">
+        {(oa || u.openartImages > 0 || u.openartVideos > 0) && (
+          <div className="usage-card">
+            <div className="usage-name">🎨 OpenArt — images &amp; vidéos</div>
+            {oa?.credits != null ? (
+              <div className="usage-big">{fr(oa.credits)} <small>crédits restants</small></div>
+            ) : oa?.error ? (
+              <div className="usage-note">Solde indisponible ({oa.error})</div>
+            ) : (
+              <div className="usage-big">…</div>
+            )}
+            <div className="usage-sub">
+              Ce drama : <strong>{fr(u.openartImages)}</strong> images ·{' '}
+              <strong>{fr(u.openartVideos)}</strong> clips vidéo
+            </div>
+          </div>
+        )}
+        <div className="usage-card">
+          <div className="usage-name">🎙️ ElevenLabs — voix</div>
+          {elRest != null ? (
+            <>
+              <div className="usage-big">{fr(elRest)} <small>crédits restants</small></div>
+              <div className="gauge" title={`${elPct} % restants`}>
+                <div className={`gauge-fill ${elPct <= 15 ? 'low' : ''}`} style={{ width: `${elPct}%` }} />
+              </div>
+              <div className="usage-note">
+                sur {fr(el.limit)}{elReset ? ` · recharge le ${elReset}` : ''}
+              </div>
+            </>
+          ) : el?.error === 'permission' ? (
+            <div className="usage-note">
+              Solde masqué — ajoute la permission « User → Read » à ta clé ElevenLabs
+            </div>
+          ) : el?.error ? (
+            <div className="usage-note">Solde indisponible ({el.error})</div>
+          ) : (
+            <div className="usage-big">…</div>
+          )}
+          <div className="usage-sub">
+            Ce drama : <strong>{fr(u.elevenChars)}</strong> crédits ({fr(u.elevenClips)} répliques)
+          </div>
+        </div>
+        <div className="usage-card">
+          <div className="usage-name">🤖 Claude — scénarios</div>
+          <div className="usage-big">Inclus <small>dans ton abonnement</small></div>
+          <div className="usage-sub">
+            Ce drama : <strong>{fr(u.claudeCalls)}</strong> écritures de scénario
+          </div>
+        </div>
+      </div>
+      {freeBits.length > 0 && <div className="usage-free">Et en gratuit : {freeBits.join(' · ')}</div>}
+    </div>
+  );
 
   if (stage === 'script_review') {
     return (
@@ -675,6 +691,8 @@ export function ProjectView({ projectId, onBack }) {
                   assetBase: `/files/${project.id}`,
                   musicFile: project.musicFile,
                   seriesTitle: project.title,
+                  studio,
+                  studioBase: '/studio',
                 }}
                 durationInFrames={duration}
                 fps={FPS}
