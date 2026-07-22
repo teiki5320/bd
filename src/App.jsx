@@ -119,7 +119,7 @@ export function App() {
       {health && (
         <p className="provider-line">
           Images : <strong>{health.imageProvider}</strong>
-          {health.imageProvider === 'openart' && ' (visages constants activés)'}
+          {health.imageProvider === 'openart' && ' (visages constants + 3 scènes vidéo par épisode)'}
           {' · '}Voix : <strong>{health.tts}</strong>
         </p>
       )}

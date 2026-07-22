@@ -1,6 +1,8 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { SPEAKER_COLORS, EPISODE_COUNT } from '../shared/catalog.js';
+import { SPEAKER_COLORS, EPISODE_COUNT, videoSceneIndexes } from '../shared/catalog.js';
+import { VIDEO_SCENES } from './config.js';
+import { openartGenerateVideo } from './openart.js';
 import { renderEpisode } from './render.js';
 import {
   askClaudeForJson,
@@ -27,6 +29,7 @@ export function ensureUsage(project) {
     project.usage = {
       claudeCalls: 0,
       openartImages: 0,
+      openartVideos: 0,
       pollinationsImages: 0,
       falImages: 0,
       elevenClips: 0,
@@ -43,6 +46,11 @@ function countImage(project, provider) {
   if (provider === 'openart') u.openartImages += 1;
   else if (provider === 'fal') u.falImages += 1;
   else if (provider === 'pollinations') u.pollinationsImages += 1;
+}
+
+function countVideo(project) {
+  const u = ensureUsage(project);
+  u.openartVideos = (u.openartVideos || 0) + 1;
 }
 
 function countVoice(project, result) {
@@ -163,11 +171,12 @@ async function generateEpisodeAssets(project, episode, update) {
       update(`Épisode ${episode.number} — image ${i + 1}/${scenes.length}…`, i / scenes.length);
       const file = `e${episode.number}_${scene.id}_v${scene.version}.jpg`;
       try {
-        const { ok, provider } = await generateImage(scene.imagePrompt, path.join(dir, file), {
+        const { ok, url, provider } = await generateImage(scene.imagePrompt, path.join(dir, file), {
           referenceUrls: sceneReferenceUrls(project, scene),
         });
         if (ok) {
           scene.image = file;
+          scene.imageUrl = url || null;
           countImage(project, provider);
         }
       } catch (e) {
@@ -208,7 +217,80 @@ async function generateEpisodeAssets(project, episode, update) {
     saveProject(project);
   }
 
+  // 3. Clips vidéo (OpenArt) : première scène, milieu et dernière — les
+  // autres restent en Ken Burns. Après les voix, pour connaître la durée cible.
+  if (provider === 'openart' && VIDEO_SCENES) {
+    const wanted = videoSceneIndexes(scenes.length);
+    for (let k = 0; k < wanted.length; k++) {
+      const scene = scenes[wanted[k]];
+      if (scene.video || scene.videoDisabled || !scene.image) {
+        continue;
+      }
+      update(
+        `Épisode ${episode.number} — vidéo ${k + 1}/${wanted.length} (scène ${wanted[k] + 1}, plusieurs minutes)…`,
+        k / wanted.length,
+      );
+      try {
+        await generateSceneVideo(project, episode, scene, () => {});
+      } catch (e) {
+        console.error(`Vidéo scène ${scene.id} :`, e.message);
+        scene.videoError = e.message;
+        saveProject(project);
+      }
+    }
+  }
+
   episode.status = 'ready';
+  saveProject(project);
+}
+
+// Prompt de mouvement pour l'image-to-video : on anime l'image existante,
+// gestes naturels et caméra discrète, sans changer visages ni décor.
+function videoMotionPrompt(scene) {
+  return (
+    `Bring this scene to life with subtle, realistic motion: characters breathe, ` +
+    `blink and make small natural gestures, one character may speak; gentle slow ` +
+    `cinematic camera push-in; faces, clothing and background stay EXACTLY as in ` +
+    `the source image. Scene: ${scene.imagePrompt}`
+  );
+}
+
+// Génère (ou régénère) le clip vidéo d'une scène via OpenArt.
+export async function generateSceneVideo(project, episode, scene, update) {
+  if (currentProvider() !== 'openart') {
+    throw new Error('Les clips vidéo nécessitent IMAGE_PROVIDER=openart dans .env');
+  }
+  delete scene.videoDisabled;
+  update('Génération du clip vidéo par OpenArt (plusieurs minutes)…');
+  const durationSec = Math.max(5, Math.min(10, Math.round(scene.durationSec || 6)));
+  const { buffer } = await openartGenerateVideo({
+    prompt: videoMotionPrompt(scene),
+    imageUrl: scene.imageUrl || null,
+    referenceUrls: scene.imageUrl ? [] : sceneReferenceUrls(project, scene),
+    durationSec,
+  });
+  scene.videoVersion = (scene.videoVersion || 0) + 1;
+  const file = `e${episode.number}_${scene.id}_vid${scene.videoVersion}.mp4`;
+  fs.writeFileSync(path.join(assetsDir(project.id), file), buffer);
+  scene.video = file;
+  delete scene.videoError;
+  countVideo(project);
+  if (episode.status === 'done') {
+    episode.status = 'ready';
+  }
+  saveProject(project);
+  return file;
+}
+
+// Retire le clip vidéo d'une scène : retour à l'image fixe (Ken Burns).
+// videoDisabled empêche la production automatique de le régénérer.
+export function removeSceneVideo(project, episode, scene) {
+  scene.video = null;
+  scene.videoDisabled = true;
+  delete scene.videoError;
+  if (episode.status === 'done') {
+    episode.status = 'ready';
+  }
   saveProject(project);
 }
 
@@ -358,11 +440,14 @@ export async function regenerateAllImages(project, episode, update) {
     scene.version += 1;
     const file = `e${episode.number}_${scene.id}_v${scene.version}.jpg`;
     try {
-      const { ok, provider } = await generateImage(scene.imagePrompt, path.join(dir, file), {
+      const { ok, url, provider } = await generateImage(scene.imagePrompt, path.join(dir, file), {
         referenceUrls: sceneReferenceUrls(project, scene),
       });
       if (ok) {
         scene.image = file;
+        scene.imageUrl = url || null;
+        // La vidéo animait l'ancienne image : elle ne correspond plus.
+        scene.video = null;
         countImage(project, provider);
         delete scene.imageError;
       }
@@ -382,13 +467,15 @@ export async function regenerateSceneImage(project, episode, scene, update) {
   await ensureCharacterPortraits(project, update);
   scene.version += 1;
   const file = `e${episode.number}_${scene.id}_v${scene.version}.jpg`;
-  const { ok, provider } = await generateImage(
+  const { ok, url, provider } = await generateImage(
     scene.imagePrompt,
     path.join(assetsDir(project.id), file),
     { referenceUrls: sceneReferenceUrls(project, scene) },
   );
   if (ok) {
     scene.image = file;
+    scene.imageUrl = url || null;
+    scene.video = null;
     countImage(project, provider);
     delete scene.imageError;
   }
@@ -530,6 +617,9 @@ export function saveUploadedImage(project, episode, scene, base64Data) {
   const file = `e${episode.number}_${scene.id}_v${scene.version}.${ext}`;
   fs.writeFileSync(path.join(assetsDir(project.id), file), Buffer.from(m[2], 'base64'));
   scene.image = file;
+  // Image importée à la main : pas d'URL distante, et l'ancienne vidéo ne correspond plus.
+  scene.imageUrl = null;
+  scene.video = null;
   delete scene.imageError;
   saveProject(project);
   return file;

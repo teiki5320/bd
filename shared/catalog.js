@@ -50,6 +50,16 @@ export function voiceById(id) {
   return VOICES.find((v) => v.id === id) || null;
 }
 
+// Scènes animées en clip vidéo (image-to-video) : la première, celle du
+// milieu et la dernière de chaque épisode. Les autres restent en Ken Burns.
+export function videoSceneIndexes(sceneCount) {
+  if (!sceneCount || sceneCount < 1) {
+    return [];
+  }
+  const set = new Set([0, Math.floor(sceneCount / 2), sceneCount - 1]);
+  return [...set].sort((a, b) => a - b);
+}
+
 export const SPEAKER_COLORS = [
   '#f2c14e',
   '#e07a5f',
