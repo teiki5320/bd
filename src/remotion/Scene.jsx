@@ -2,6 +2,7 @@ import React from 'react';
 import {
   AbsoluteFill,
   Img,
+  OffthreadVideo,
   Sequence,
   Audio,
   interpolate,
@@ -57,7 +58,16 @@ export const Scene = ({ scene, characters, assetBase, isFirst, episodeTitle, epi
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#0c0a08', overflow: 'hidden' }}>
-      {scene.image ? (
+      {scene.video ? (
+        // Clip vidéo généré par OpenArt (muet : voix off et musique par-dessus).
+        // Si la scène dure plus longtemps que le clip, la dernière image reste affichée.
+        <OffthreadVideo
+          src={`${assetBase}/${scene.video}`}
+          muted
+          pauseWhenBuffering
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : scene.image ? (
         <Img
           src={`${assetBase}/${scene.image}`}
           style={{

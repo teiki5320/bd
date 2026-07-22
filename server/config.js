@@ -21,5 +21,9 @@ export const PROJECTS_DIR = path.join(ROOT, 'projects');
 export const DIST_DIR = path.join(ROOT, 'dist');
 export const PORT = Number(process.env.PORT || 4600);
 export const IMAGE_PROVIDER = (process.env.IMAGE_PROVIDER || 'pollinations').toLowerCase();
+// Clips vidéo automatiques (1re scène, milieu, dernière) — VIDEO_SCENES=off pour couper.
+export const VIDEO_SCENES = !['off', '0', 'false', 'non'].includes(
+  (process.env.VIDEO_SCENES || 'on').toLowerCase(),
+);
 
 fs.mkdirSync(PROJECTS_DIR, { recursive: true });

@@ -26,6 +26,8 @@ import {
   regenerateAllAudio,
   regenerateSceneImage,
   regenerateSceneAudio,
+  generateSceneVideo,
+  removeSceneVideo,
   regenerateCharacterPortrait,
   newCharacterFace,
   characterVoicePreview,
@@ -404,6 +406,23 @@ app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/image', (req, res) => {
     }
     const job = startJob('Nouvelle image', (update) => regenerateSceneImage(p, ep, scene, update), { projectId: p.id });
     res.json({ jobId: job.id });
+  });
+});
+
+// Clip vidéo d'une scène : génération (coûteuse en crédits) ou retour à l'image fixe.
+app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/video', (req, res) => {
+  withScene(req, res, (p, ep, scene) => {
+    const job = startJob('Clip vidéo de la scène', (update) =>
+      generateSceneVideo(p, ep, scene, update),
+    { projectId: p.id });
+    res.json({ jobId: job.id });
+  });
+});
+
+app.delete('/api/projects/:id/episodes/:n/scenes/:sceneId/video', (req, res) => {
+  withScene(req, res, (p, ep, scene) => {
+    removeSceneVideo(p, ep, scene);
+    res.json(p);
   });
 });
 

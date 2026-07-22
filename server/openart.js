@@ -5,6 +5,8 @@ import { spawn, execFile } from 'node:child_process';
 // machine et authentifié une fois via `/mcp`.
 
 const TIMEOUT_MS = 8 * 60 * 1000;
+// Les vidéos prennent bien plus longtemps qu'une image (files d'attente des modèles).
+const VIDEO_TIMEOUT_MS = 25 * 60 * 1000;
 
 // Détecte le nom sous lequel le MCP OpenArt est enregistré (`claude mcp list`).
 let mcpNamePromise = null;
@@ -52,7 +54,7 @@ function buildInstruction(prompt, referenceUrls) {
 Attends la fin de la génération. Puis réponds UNIQUEMENT avec l'URL directe du fichier image généré (une seule ligne, aucune autre phrase). Si la génération échoue, réponds "ERREUR: " suivi de la cause exacte.`;
 }
 
-function runClaude(instruction, mcpName) {
+function runClaude(instruction, mcpName, timeoutMs = TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       'claude',
@@ -71,7 +73,7 @@ function runClaude(instruction, mcpName) {
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       reject(new Error('OpenArt : génération trop longue (délai dépassé).'));
-    }, TIMEOUT_MS);
+    }, timeoutMs);
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (err += d));
     child.on('error', reject);
@@ -95,17 +97,19 @@ function runClaude(instruction, mcpName) {
   });
 }
 
-async function downloadImage(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(120000) });
+async function downloadFile(url, { minBytes = 5000, timeoutMs = 120000, label = "l'image" } = {}) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) {
-    throw new Error(`Téléchargement de l'image OpenArt : HTTP ${res.status}`);
+    throw new Error(`Téléchargement de ${label} OpenArt : HTTP ${res.status}`);
   }
   const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length < 5000) {
-    throw new Error("L'URL OpenArt ne renvoie pas une image valide.");
+  if (buf.length < minBytes) {
+    throw new Error(`L'URL OpenArt ne renvoie pas ${label === "l'image" ? 'une image valide' : 'une vidéo valide'}.`);
   }
   return buf;
 }
+
+const downloadImage = (url) => downloadFile(url, { label: "l'image" });
 
 // Solde de crédits OpenArt via le MCP (mis en cache 10 min — chaque
 // consultation coûte un appel Claude headless).
@@ -176,6 +180,79 @@ export async function openartGenerate({ prompt, referenceUrls = [] }) {
     } catch (e) {
       lastErr = e;
       // Les erreurs de crédits/auth ne se règlent pas en réessayant.
+      if (/crédit|authentification/.test(e.message)) {
+        throw e;
+      }
+    }
+  }
+  throw lastErr;
+}
+
+function buildVideoInstruction({ prompt, imageUrl, referenceUrls, durationSec }) {
+  const source = imageUrl
+    ? `\n- IMPORTANT — image-to-video : anime EXACTEMENT cette image (utilise-la comme image de départ / première frame, les visages et le décor doivent rester IDENTIQUES) :\n  ${imageUrl}`
+    : referenceUrls.length > 0
+      ? `\n- IMPORTANT — cohérence des visages : utilise ces portraits comme références de personnages, les visages doivent être IDENTIQUES à ceux des références :\n${referenceUrls.map((u) => `  - ${u}`).join('\n')}`
+      : '';
+  return `Tu as accès aux outils MCP OpenArt. Génère UN SEUL clip VIDÉO via OpenArt :
+- Prompt : ${prompt}
+- Format : vertical 9:16 (par exemple 1080x1920).
+- Durée cible : ${durationSec} secondes (choisis la durée disponible la plus proche).${source}
+- Choisis un modèle vidéo de qualité qui accepte une image de référence (Kling, Seedance, PixVerse, Wan ou équivalent disponible) ; à qualité comparable, prends le moins cher en crédits.
+Attends la fin de la génération — cela peut prendre plusieurs minutes, patiente et vérifie le statut si nécessaire. Puis réponds UNIQUEMENT avec l'URL directe du fichier vidéo généré (.mp4, une seule ligne, aucune autre phrase). Si la génération échoue, réponds "ERREUR: " suivi de la cause exacte.`;
+}
+
+// Génère un clip vidéo (image-to-video de préférence). Retourne { buffer, url }.
+export async function openartGenerateVideo({
+  prompt,
+  imageUrl = null,
+  referenceUrls = [],
+  durationSec = 5,
+}) {
+  const mcpName = await detectMcpName();
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const text = await runClaude(
+        buildVideoInstruction({ prompt, imageUrl, referenceUrls, durationSec }),
+        mcpName,
+        VIDEO_TIMEOUT_MS,
+      );
+      if (/^ERREUR\s*:/i.test(text)) {
+        const cause = text.replace(/^ERREUR\s*:/i, '').trim();
+        if (/credit|crédit/i.test(cause)) {
+          throw new Error(`OpenArt : crédits insuffisants — ${cause}`);
+        }
+        if (/auth|connect|login|token/i.test(cause)) {
+          throw new Error(
+            `OpenArt : problème d'authentification MCP — relance \`claude\`, tape /mcp, et reconnecte "${mcpName}". (${cause})`,
+          );
+        }
+        throw new Error(`OpenArt : ${cause}`);
+      }
+      const urls = [...text.matchAll(/https?:\/\/[^\s"'<>)\]]+/g)].map((m) => m[0]);
+      if (urls.length === 0) {
+        throw new Error(`OpenArt : aucune URL de vidéo dans la réponse (« ${text.slice(0, 200)} »).`);
+      }
+      for (let i = urls.length - 1; i >= 0; i--) {
+        // On ne re-télécharge pas l'image source si le modèle l'a recopiée dans sa réponse.
+        if (urls[i] === imageUrl) {
+          continue;
+        }
+        try {
+          const buffer = await downloadFile(urls[i], {
+            minBytes: 50000,
+            timeoutMs: 300000,
+            label: 'la vidéo',
+          });
+          return { buffer, url: urls[i] };
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      throw lastErr || new Error('OpenArt : aucune URL de vidéo téléchargeable.');
+    } catch (e) {
+      lastErr = e;
       if (/crédit|authentification/.test(e.message)) {
         throw e;
       }

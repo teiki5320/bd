@@ -64,6 +64,10 @@ export const api = {
     }),
   regenAudio: (id, n, sceneId) =>
     request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}/audio`, { method: 'POST' }),
+  regenVideo: (id, n, sceneId) =>
+    request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}/video`, { method: 'POST' }),
+  removeVideo: (id, n, sceneId) =>
+    request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}/video`, { method: 'DELETE' }),
   uploadSceneImage: (id, n, sceneId, dataUrl) =>
     request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}/upload-image`, {
       method: 'POST',

@@ -3,7 +3,7 @@ import { Player } from '@remotion/player';
 import { Episode } from './remotion/Episode.jsx';
 import { FPS, WIDTH, HEIGHT, episodeDurationInFrames } from './remotion/timing.js';
 import { api, followJob, fileToDataUrl } from './api.js';
-import { EPISODE_COUNT, VOICES } from '../shared/catalog.js';
+import { EPISODE_COUNT, VOICES, videoSceneIndexes } from '../shared/catalog.js';
 
 const STATUS_LABELS = {
   script: '📝 script',
@@ -212,7 +212,7 @@ function CharactersReview({ project, busy, runJob, onValidate, projectId }) {
   );
 }
 
-function SceneCard({ project, episode, scene, index, busy, runJob, onRefresh }) {
+function SceneCard({ project, episode, scene, index, isAutoVideo, busy, runJob, onRefresh }) {
   const [lines, setLines] = useState(scene.lines);
   const [prompt, setPrompt] = useState(scene.imagePrompt);
   const [dirty, setDirty] = useState(false);
@@ -237,15 +237,48 @@ function SceneCard({ project, episode, scene, index, busy, runJob, onRefresh }) 
     onRefresh();
   };
 
+  const generateVideo = () => {
+    if (
+      confirm(
+        `${scene.video ? 'Régénérer' : 'Générer'} le clip vidéo de cette scène ?\n\nUn clip vidéo coûte nettement plus de crédits OpenArt qu'une image, et la génération prend plusieurs minutes.`,
+      )
+    ) {
+      runJob(() => api.regenVideo(project.id, episode.number, scene.id));
+    }
+  };
+
+  const removeVideo = async () => {
+    await api.removeVideo(project.id, episode.number, scene.id);
+    onRefresh();
+  };
+
   return (
     <div className="scene-card">
       <div className="scene-head">
-        <strong>Scène {index + 1}</strong>
+        <strong>
+          Scène {index + 1}
+          {scene.video ? (
+            <span className="scene-badge">🎬 vidéo</span>
+          ) : isAutoVideo && !scene.videoDisabled ? (
+            <span className="scene-badge dim" title="Cette scène sera animée en clip vidéo à la production">
+              🎬 vidéo prévue
+            </span>
+          ) : null}
+        </strong>
         <span className="scene-duration">{(scene.durationSec || 5).toFixed(1)} s</span>
       </div>
 
       <div className="scene-thumb-row">
-        {scene.image ? (
+        {scene.video ? (
+          <video
+            className="scene-thumb"
+            src={`/files/${project.id}/${scene.video}`}
+            muted
+            loop
+            autoPlay
+            playsInline
+          />
+        ) : scene.image ? (
           <img
             className="scene-thumb"
             src={`/files/${project.id}/${scene.image}`}
@@ -327,8 +360,27 @@ function SceneCard({ project, episode, scene, index, busy, runJob, onRefresh }) 
         >
           🔊 {audioStale ? 'Générer la voix' : 'Régénérer la voix'}
         </button>
+        <button
+          className="btn-small"
+          disabled={busy || !scene.image}
+          title="Anime cette scène en clip vidéo (image-to-video OpenArt) — plus coûteux qu'une image"
+          onClick={generateVideo}
+        >
+          🎬 {scene.video ? 'Régénérer la vidéo' : 'Générer la vidéo'}
+        </button>
+        {scene.video && (
+          <button
+            className="btn-small"
+            disabled={busy}
+            title="Retire le clip vidéo et revient à l'image animée (Ken Burns)"
+            onClick={removeVideo}
+          >
+            🖼️ Revenir à l'image
+          </button>
+        )}
       </div>
       {scene.imageError && <p className="error small">Image : {scene.imageError}</p>}
+      {scene.videoError && <p className="error small">Vidéo : {scene.videoError}</p>}
       {scene.lines.some((l) => l.audioError) && (
         <p className="error small">Voix : {scene.lines.find((l) => l.audioError).audioError}</p>
       )}
@@ -500,8 +552,11 @@ export function ProjectView({ projectId, onBack }) {
     } else if (el && el.error) {
       balance = ` · solde indisponible (${el.error})`;
     }
-    if (u.openartImages || balance) {
-      usageRows.push(`🎨 OpenArt — ${fr(u.openartImages)} images générées pour ce drama${balance}`);
+    if (u.openartImages || u.openartVideos || balance) {
+      const videos = u.openartVideos ? ` + ${fr(u.openartVideos)} clips vidéo` : '';
+      usageRows.push(
+        `🎨 OpenArt — ${fr(u.openartImages)} images${videos} générés pour ce drama${balance}`,
+      );
     }
     if (u.falImages) usageRows.push(`🖼️ fal.ai — ${fr(u.falImages)} images`);
     if (u.pollinationsImages)
@@ -689,7 +744,7 @@ export function ProjectView({ projectId, onBack }) {
                   onClick={() => {
                     if (
                       confirm(
-                        `Produire automatiquement les ${remainingCount} épisodes restants (scénario, images, voix et MP4) ?\n\nC'est long — souvent plus d'une heure avec OpenArt — et ça consomme tes crédits images et ElevenLabs. Tu peux fermer la page et revenir : la production continue et l'avancement se raccroche tout seul.`,
+                        `Produire automatiquement les ${remainingCount} épisodes restants (scénario, images, clips vidéo, voix et MP4) ?\n\nC'est long — souvent plus d'une heure avec OpenArt — et ça consomme tes crédits images/vidéos et ElevenLabs (3 scènes par épisode sont animées en vidéo, nettement plus coûteux). Tu peux fermer la page et revenir : la production continue et l'avancement se raccroche tout seul.`,
                       )
                     ) {
                       runJob(() => api.produceSeason(projectId));
@@ -760,6 +815,7 @@ export function ProjectView({ projectId, onBack }) {
                 episode={episode}
                 scene={scene}
                 index={i}
+                isAutoVideo={videoSceneIndexes(episode.scenes.length).includes(i)}
                 busy={busy}
                 runJob={runJob}
                 onRefresh={refresh}

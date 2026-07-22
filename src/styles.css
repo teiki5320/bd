@@ -752,6 +752,23 @@ code {
   font-size: 0.85rem;
 }
 
+.scene-badge {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(242, 193, 78, 0.12);
+  color: var(--gold-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.scene-badge.dim {
+  background: transparent;
+  color: var(--muted);
+}
+
 .scene-thumb-row {
   display: flex;
   gap: 14px;
