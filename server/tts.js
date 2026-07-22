@@ -80,24 +80,28 @@ export function assignVoices(characters) {
 }
 
 // ---------- ElevenLabs (qualité studio, clé requise) ----------
-// Modèle par défaut : turbo v2.5 — il permet d'IMPOSER le français
-// (language_code), là où multilingual_v2 devine la langue et se trompe sur
-// les répliques courtes (accent anglais). Bonus : 2× moins de crédits.
+// Modèle par défaut : multilingual_v2 — le seul avec un accent français
+// d'Europe correct sur ces voix anglophones. Imposer le français via
+// language_code (turbo/flash v2.5) leur donne un accent québécois.
+// Son défaut — basculer en anglais sur les répliques courtes — est traité
+// en ancrant la langue avec un contexte français (previous_text, non facturé).
 async function synthesizeEleven(text, voiceId, outPath) {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
     throw new Error('ELEVENLABS_API_KEY absente du .env');
   }
-  const model = process.env.ELEVEN_MODEL || 'eleven_turbo_v2_5';
+  const model = process.env.ELEVEN_MODEL || 'eleven_multilingual_v2';
   const isV25 = /turbo_v2_5|flash_v2_5/.test(model);
   const body = {
     text,
     model_id: model,
-    // Sur turbo/flash v2.5, style > 0 provoque grésillements et artefacts :
-    // il doit rester à 0. L'expressivité vient du texte, pas de ce réglage.
+    // Sur turbo/flash v2.5, style > 0 provoque grésillements et artefacts.
     voice_settings: isV25
       ? { stability: 0.5, similarity_boost: 0.75, style: 0 }
       : { stability: 0.45, similarity_boost: 0.75, style: 0.35 },
+    // Ancre la détection de langue : la réplique est lue comme la suite
+    // d'un dialogue français, plus de bascule vers l'anglais.
+    previous_text: 'La conversation continue, toujours en français. Il répondit alors :',
   };
   // Seuls turbo/flash v2.5 acceptent language_code (rejeté par multilingual_v2).
   if (isV25) {
