@@ -10,6 +10,7 @@ import {
   buildCustomSeriesPrompt,
   buildEpisodePrompt,
   buildNewFacePrompt,
+  drawVariety,
 } from './claudegen.js';
 import { generateImage, currentProvider } from './images.js';
 import { assignVoices, synthesize, voiceFor, isCatalogVoice } from './tts.js';
@@ -19,6 +20,8 @@ import {
   saveProject,
   assetsDir,
   findEpisode,
+  listProjects,
+  loadProject,
 } from './projects.js';
 import { LINE_START_DELAY, LINE_GAP } from '../src/remotion/timing.js';
 
@@ -316,9 +319,38 @@ function mapCharacters(data) {
   );
 }
 
+// Prénoms et contextes des dramas existants — interdits pour la prochaine
+// série, afin que chaque histoire change vraiment (noms, pays, univers).
+function usedNamesAndPlaces() {
+  const names = new Set();
+  const places = [];
+  try {
+    for (const summary of listProjects()) {
+      const p = loadProject(summary.id);
+      if (!p) {
+        continue;
+      }
+      for (const c of p.characters || []) {
+        const first = String(c.name || '').trim().split(/\s+/)[0];
+        if (first) {
+          names.add(first);
+        }
+      }
+      if (p.setting) {
+        places.push(`${p.title} : ${String(p.setting).slice(0, 70)}`);
+      }
+    }
+  } catch {
+    // la collecte ne doit jamais bloquer une création
+  }
+  return { names: [...names].slice(0, 40), places: places.slice(0, 10) };
+}
+
 export async function createProject({ styles, theme }, update) {
   update('Écriture du scénario par Claude (1 à 3 minutes)…');
-  const data = await askClaudeForJson(buildSeriesPrompt(styles, theme));
+  const data = await askClaudeForJson(
+    buildSeriesPrompt(styles, theme, drawVariety(), usedNamesAndPlaces()),
+  );
 
   const id = newId();
   createProjectDirs(id);
@@ -403,10 +435,12 @@ export async function createCustomProject(answers, update) {
 // pour un drama en mode « mon script ») tant que le scénario n'est pas validé.
 export async function regenerateScript(project, update) {
   update('Nouvelle écriture du scénario par Claude (1 à 3 minutes)…');
+  // Nouveau tirage au sort à chaque régénération : autre pays, autre univers,
+  // autres noms (ceux du brouillon actuel sont inclus dans les interdits).
   const data = await askClaudeForJson(
     project.customAnswers
       ? buildCustomSeriesPrompt(project.customAnswers)
-      : buildSeriesPrompt(project.styles, project.theme),
+      : buildSeriesPrompt(project.styles, project.theme, drawVariety(), usedNamesAndPlaces()),
   );
   ensureUsage(project).claudeCalls += 1;
   project.title = (project.customAnswers && project.customAnswers.title) || data.title || project.title;

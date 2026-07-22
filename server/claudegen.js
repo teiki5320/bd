@@ -117,12 +117,84 @@ const SERIES_RULES = `Contraintes STRICTES :
 - Le cliffhanger final doit donner physiquement envie de voir la suite (danger imminent, secret sur le point d'éclater, retournement).
 - Les "imagePrompt" sont autonomes : quelqu'un qui n'a pas lu le script doit pouvoir générer l'image.`;
 
-export function buildSeriesPrompt(styles, theme) {
+// Sans contrainte, Claude retombe toujours sur les mêmes choix (Awa, Koné,
+// Abidjan…). C'est donc l'appli qui tire au sort le cadre de chaque série,
+// et qui interdit les prénoms/lieux déjà utilisés dans les dramas existants.
+const AFRICAN_SETTINGS = [
+  { country: "Côte d'Ivoire", cities: ['Abidjan', 'Bouaké', 'Yamoussoukro', 'San-Pédro', 'Korhogo'] },
+  { country: 'Sénégal', cities: ['Dakar', 'Saint-Louis', 'Thiès', 'Ziguinchor', 'Mbour'] },
+  { country: 'Cameroun', cities: ['Douala', 'Yaoundé', 'Bafoussam', 'Kribi', 'Garoua'] },
+  { country: 'Mali', cities: ['Bamako', 'Ségou', 'Sikasso', 'Kayes'] },
+  { country: 'Burkina Faso', cities: ['Ouagadougou', 'Bobo-Dioulasso', 'Koudougou'] },
+  { country: 'Bénin', cities: ['Cotonou', 'Porto-Novo', 'Parakou', 'Abomey'] },
+  { country: 'Togo', cities: ['Lomé', 'Kara', 'Sokodé'] },
+  { country: 'Guinée', cities: ['Conakry', 'Kankan', 'Labé'] },
+  { country: 'RD Congo', cities: ['Kinshasa', 'Lubumbashi', 'Goma', 'Kisangani'] },
+  { country: 'Congo-Brazzaville', cities: ['Brazzaville', 'Pointe-Noire'] },
+  { country: 'Gabon', cities: ['Libreville', 'Port-Gentil', 'Franceville'] },
+  { country: 'Niger', cities: ['Niamey', 'Zinder', 'Maradi'] },
+  { country: 'Madagascar', cities: ['Antananarivo', 'Toamasina', 'Mahajanga'] },
+];
+
+const MILIEUX = [
+  'le milieu des affaires et des villas de luxe',
+  'un grand marché populaire et ses commerçantes',
+  'une chefferie traditionnelle et sa cour',
+  'le monde de la musique et des maquis',
+  'un grand hôpital et ses médecins',
+  "l'université et les résidences étudiantes",
+  'le football local et ses supporters',
+  'les ateliers de couture et le monde de la mode',
+  'une église influente et sa chorale',
+  'le port de pêche et ses mareyeuses',
+  'une plantation de cacao et de café',
+  'les mines d\'or et leurs convoitises',
+  'un hôtel de luxe en bord de mer',
+  'les taxis, gbakas et gares routières',
+  'une radio-télévision locale et ses vedettes',
+  'la diaspora, entre Paris et le pays',
+  'le tribunal, les avocats et un grand procès',
+  'une auto-école ou un garage de quartier',
+  'la politique locale et une campagne électorale',
+  'un restaurant réputé et ses cuisines',
+];
+
+// Prénoms que les IA recyclent sans arrêt — bannis d'office.
+const OVERUSED_NAMES = ['Awa', 'Aminata', 'Fatou', 'Fatoumata', 'Aïcha', 'Mariam', 'Kwame', 'Kofi', 'Amara', 'Ismaël', 'Moussa', 'Sekou'];
+
+export function drawVariety() {
+  const s = AFRICAN_SETTINGS[Math.floor(Math.random() * AFRICAN_SETTINGS.length)];
+  return {
+    country: s.country,
+    city: s.cities[Math.floor(Math.random() * s.cities.length)],
+    milieu: MILIEUX[Math.floor(Math.random() * MILIEUX.length)],
+  };
+}
+
+export function buildSeriesPrompt(styles, theme, variety = null, avoid = null) {
   const styleNames = styles.map((s) => styleLabel(s)).join(' + ');
+  const bannedNames = [...new Set([...OVERUSED_NAMES, ...((avoid && avoid.names) || [])])];
+  const varietyBlock = variety
+    ? `
+Cadre TIRÉ AU SORT pour cette série (chaque série doit dépayser par rapport aux précédentes) :
+- Pays : ${variety.country} — ville principale : ${variety.city}.
+- Univers de l'intrigue : ${variety.milieu}.
+Ce cadre est OBLIGATOIRE${theme ? " — sauf si l'idée du producteur impose un autre lieu, auquel cas elle prime" : ''}.
+
+Diversité OBLIGATOIRE (anti-répétition) :
+- Prénoms ET noms de famille authentiques et variés du pays choisi (${variety.country}), crédibles pour chaque ethnie/région.
+- Prénoms INTERDITS (déjà vus ou sur-utilisés) : ${bannedNames.join(', ')}.${
+        avoid && avoid.places && avoid.places.length > 0
+          ? `\n- Contextes déjà exploités dans les séries précédentes, à NE PAS recycler :\n${avoid.places.map((p) => `  - ${p}`).join('\n')}`
+          : ''
+      }
+- Trouve un angle d'intrigue original : surprends, ne refais pas l'histoire attendue.
+`
+    : '';
   return `Tu es scénariste de micro-dramas africains au format vertical (type TikTok), épisodes de 60 secondes très addictifs.
 
 Crée une NOUVELLE série en ${EPISODE_COUNT} épisodes mêlant ces thèmes : ${styleNames}.${theme ? `\nIdée imposée par le producteur : ${theme}` : ''}
-
+${varietyBlock}
 Réponds UNIQUEMENT avec un objet JSON valide (aucun texte autour, aucun commentaire), selon ce schéma exact :
 ${SERIES_SCHEMA}
 
