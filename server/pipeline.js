@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { SPEAKER_COLORS, EPISODE_COUNT, videoSceneIndexes } from '../shared/catalog.js';
 import { VIDEO_SCENES } from './config.js';
 import { openartGenerateVideo } from './openart.js';
+import { buildSceneVoiceTrack, lipsyncVideo } from './lipsync.js';
 import { renderEpisode } from './render.js';
 import {
   askClaudeForJson,
@@ -40,6 +41,7 @@ export function ensureUsage(project) {
       elevenChars: 0,
       edgeClips: 0,
       sayClips: 0,
+      falLipsyncs: 0,
     };
   }
   return project.usage;
@@ -248,6 +250,20 @@ async function generateEpisodeAssets(project, episode, update) {
         scene.videoError = e.message;
         saveProject(project);
       }
+      // Version Synchro : lèvres animées sur la voix, dans la foulée du clip.
+      if (project.mode === 'synchro' && scene.video && !scene.lipsynced) {
+        update(
+          `Épisode ${episode.number} — synchro labiale ${k + 1}/${wanted.length} (scène ${wanted[k] + 1})…`,
+          k / wanted.length,
+        );
+        try {
+          await lipsyncSceneVideo(project, episode, scene, () => {});
+        } catch (e) {
+          console.error(`Synchro scène ${scene.id} :`, e.message);
+          scene.lipsyncError = e.message;
+          saveProject(project);
+        }
+      }
     }
   }
 
@@ -288,6 +304,8 @@ export async function generateSceneVideo(project, episode, scene, update) {
   const file = `e${episode.number}_${scene.id}_vid${scene.videoVersion}.mp4`;
   fs.writeFileSync(path.join(assetsDir(project.id), file), buffer);
   scene.video = file;
+  // Nouveau clip = lèvres plus synchronisées (Version Synchro).
+  scene.lipsynced = false;
   delete scene.videoError;
   countVideo(project);
   if (episode.status === 'done') {
@@ -295,6 +313,40 @@ export async function generateSceneVideo(project, episode, scene, update) {
   }
   saveProject(project);
   return file;
+}
+
+// Version Synchro : anime les lèvres du clip sur la piste voix de la scène
+// (fal.ai). Le clip synchronisé remplace le clip muet ; la voix ElevenLabs
+// d'origine joue par-dessus dans le montage, parfaitement calée.
+export async function lipsyncSceneVideo(project, episode, scene, update) {
+  if (project.mode !== 'synchro') {
+    throw new Error('La synchro labiale est réservée aux dramas « Version Synchro ».');
+  }
+  if (!scene.video) {
+    throw new Error("Génère d'abord le clip vidéo de la scène.");
+  }
+  const dir = assetsDir(project.id);
+  update('Préparation de la piste voix de la scène…');
+  const track = path.join(dir, `e${episode.number}_${scene.id}_voicetrack.mp3`);
+  await buildSceneVoiceTrack(project, scene, track);
+  scene.videoVersion = (scene.videoVersion || 0) + 1;
+  const out = `e${episode.number}_${scene.id}_sync${scene.videoVersion}.mp4`;
+  await lipsyncVideo({
+    videoPath: path.join(dir, scene.video),
+    audioPath: track,
+    outPath: path.join(dir, out),
+    update,
+  });
+  fs.rmSync(track, { force: true });
+  scene.video = out;
+  scene.lipsynced = true;
+  delete scene.lipsyncError;
+  ensureUsage(project).falLipsyncs = (ensureUsage(project).falLipsyncs || 0) + 1;
+  if (episode.status === 'done') {
+    episode.status = 'ready';
+  }
+  saveProject(project);
+  return out;
 }
 
 // Retire le clip vidéo d'une scène : retour à l'image fixe (Ken Burns).
@@ -352,7 +404,7 @@ function usedNamesAndPlaces() {
   return { names: [...names].slice(0, 40), places: places.slice(0, 10) };
 }
 
-export async function createProject({ styles, theme }, update) {
+export async function createProject({ styles, theme, mode }, update) {
   update('Écriture du scénario par Claude (1 à 3 minutes)…');
   const data = await askClaudeForJson(
     buildSeriesPrompt(styles, theme, drawVariety(), usedNamesAndPlaces()),
@@ -363,6 +415,7 @@ export async function createProject({ styles, theme }, update) {
 
   const project = {
     id,
+    mode: mode === 'synchro' ? 'synchro' : 'normal',
     title: data.title || 'Drama sans titre',
     logline: data.logline || '',
     setting: data.setting || '',
@@ -402,6 +455,7 @@ export async function createCustomProject(answers, update) {
 
   const project = {
     id,
+    mode: answers.mode === 'synchro' ? 'synchro' : 'normal',
     title: answers.title || data.title || 'Drama sans titre',
     logline: data.logline || '',
     setting: answers.setting || data.setting || '',
@@ -677,6 +731,10 @@ export async function regenerateSceneAudio(project, episode, scene, update) {
     delete line.audioError;
   }
   recomputeSceneDuration(scene);
+  // Voix refaites → les lèvres du clip synchronisé ne correspondent plus.
+  if (project.mode === 'synchro' && scene.video && scene.lipsynced) {
+    scene.lipsynced = false;
+  }
   saveProject(project);
 }
 
