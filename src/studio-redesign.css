@@ -104,10 +104,15 @@
   overflow-y: auto;
 }
 
-/* Le lecteur se dimensionne pour rester dans le viewport avec les boutons */
+/* Le lecteur ne doit JAMAIS être écrasé par le flex (sinon la vidéo 9:16 est
+   rognée par l'overflow hidden du cadre). Il se dimensionne par la hauteur
+   disponible, la largeur découle du ratio ; au pire la colonne défile. */
 .studio-player-col .player-frame {
-  width: 100%;
-  max-width: min(100%, calc((100vh - 430px) * 0.5625));
+  flex: 0 0 auto;
+  height: clamp(300px, calc(100vh - 470px), 640px);
+  aspect-ratio: 9 / 16;
+  width: auto;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -147,6 +152,8 @@
     border-bottom: 1px solid var(--border);
   }
   .studio-player-col .player-frame {
+    height: auto;
+    width: 100%;
     max-width: 380px;
   }
 }
