@@ -12,6 +12,20 @@ const STATUS_LABELS = {
   done: '✅ validé',
 };
 
+// Lieu de rangement lisible à partir du chemin d'export réel d'un épisode.
+function exportPlace(exportedTo) {
+  if (!exportedTo) {
+    return null;
+  }
+  if (exportedTo.includes('com~apple~CloudDocs')) {
+    return '☁️ iCloud Drive → Dramas';
+  }
+  if (exportedTo.includes('/Desktop/')) {
+    return '🖥️ Bureau → Dramas';
+  }
+  return `📁 ${exportedTo.replace(/\/[^/]+$/, '')}`;
+}
+
 // ---------- Étape 1 : validation du scénario ----------
 function ScriptReview({ project, busy, onRegen, onValidate }) {
   const ep1 = project.episodes[0];
@@ -398,6 +412,7 @@ export function ProjectView({ projectId, onBack }) {
   const [playerKey, setPlayerKey] = useState(0);
   const [credits, setCredits] = useState(null);
   const [studio, setStudio] = useState(null);
+  const [justRendered, setJustRendered] = useState(null);
 
   const loadCredits = () => api.credits().then(setCredits).catch(() => {});
 
@@ -439,6 +454,10 @@ export function ProjectView({ projectId, onBack }) {
     () => project?.episodes?.find((e) => e.number === epNumber) || null,
     [project, epNumber],
   );
+
+  useEffect(() => {
+    setJustRendered(null);
+  }, [epNumber]);
 
   const duration = useMemo(
     () => (episode ? episodeDurationInFrames(episode, studio) : FPS * 3),
@@ -707,12 +726,45 @@ export function ProjectView({ projectId, onBack }) {
     </nav>
   );
 
+  const openFolder = () =>
+    api.openFolder(projectId).catch((e) => alert(`Ouverture du dossier : ${e.message}`));
+
+  const place =
+    exportPlace(episode?.exportedTo) ||
+    exportPlace(project.episodes.find((e) => e.exportedTo)?.exportedTo);
+
   const playerActions = (
     <div className="player-actions">
+      {justRendered === epNumber && episode?.renderedFile && (
+        <div className="render-success">
+          <div className="rs-title">🎉 Épisode {episode.number} terminé !</div>
+          <p>
+            Le MP4 est rangé automatiquement dans{' '}
+            <strong>{place || 'le dossier Dramas'} → {project.title}</strong>.
+          </p>
+          <div className="rs-actions">
+            <button className="btn-small primary" onClick={openFolder}>
+              📂 Ouvrir le dossier
+            </button>
+            <a
+              className="btn-small"
+              href={`/files/${project.id}/${episode.renderedFile}`}
+              download={`${project.title} - episode ${episode.number}.mp4`}
+              title="Télécharge une copie dans le dossier Téléchargements de Safari"
+            >
+              ⬇️ Télécharger une copie
+            </a>
+          </div>
+        </div>
+      )}
       <button
         className="btn-primary"
         disabled={busy}
-        onClick={() => runJob(() => api.renderEpisode(projectId, epNumber))}
+        onClick={() =>
+          runJob(() => api.renderEpisode(projectId, epNumber)).then(
+            (ok) => ok && setJustRendered(epNumber),
+          )
+        }
       >
         ✅ Valider et produire le MP4
       </button>
@@ -799,7 +851,16 @@ export function ProjectView({ projectId, onBack }) {
             )}
           </div>
           <p className="downloads-hint">
-            📁 Copiés automatiquement dans <strong>Bureau → Dramas → {project.title}</strong>
+            {place ? (
+              <>
+                Rangés automatiquement dans <strong>{place} → {project.title}</strong>{' '}
+              </>
+            ) : (
+              <>Rangés automatiquement dans le dossier <strong>Dramas</strong> </>
+            )}
+            <button className="btn-small" onClick={openFolder} title="Ouvrir dans le Finder">
+              📂 Ouvrir
+            </button>
           </p>
         </div>
       )}

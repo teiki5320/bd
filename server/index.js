@@ -39,7 +39,7 @@ import { renderEpisode } from './render.js';
 import { currentProvider } from './images.js';
 import { ttsInfo, elevenBalance } from './tts.js';
 import { openartCredits } from './openart.js';
-import { exportAllProjects, EXPORT_ROOT } from './exporter.js';
+import { exportAllProjects, EXPORT_ROOT, projectExportDir } from './exporter.js';
 import {
   STUDIO_DIR,
   loadStudio,
@@ -272,6 +272,32 @@ app.post('/api/projects/:id/produce-season', (req, res) => {
     projectId: p.id,
   });
   res.json({ jobId: job.id });
+});
+
+// Ouvre le dossier des épisodes exportés dans le Finder (Mac uniquement).
+app.post('/api/projects/:id/open-folder', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  if (process.platform !== 'darwin') {
+    res.status(400).json({ error: "L'ouverture du dossier n'est possible que sur Mac." });
+    return;
+  }
+  const dramaDir = projectExportDir(p.title);
+  const target = fs.existsSync(dramaDir)
+    ? dramaDir
+    : fs.existsSync(EXPORT_ROOT)
+      ? EXPORT_ROOT
+      : rendersDir(p.id);
+  execFile('open', [target], (err) => {
+    if (err) {
+      res.status(500).json({ error: `Ouverture impossible : ${err.message}` });
+    } else {
+      res.json({ ok: true, dir: target });
+    }
+  });
 });
 
 // Archive .zip de tous les MP4 rendus
