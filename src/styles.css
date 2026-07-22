@@ -564,6 +564,26 @@ code {
   background: var(--danger);
 }
 
+/* Sélecteur du nombre de clips vidéo par épisode (en-tête du drama) */
+.video-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.video-count select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
 /* Encart de succès après « Valider et produire le MP4 » */
 .render-success {
   background: rgba(212, 175, 55, 0.1);

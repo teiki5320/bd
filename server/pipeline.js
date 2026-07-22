@@ -218,10 +218,11 @@ async function generateEpisodeAssets(project, episode, update) {
     saveProject(project);
   }
 
-  // 3. Clips vidéo (OpenArt) : première scène, milieu et dernière — les
-  // autres restent en Ken Burns. Après les voix, pour connaître la durée cible.
-  if (provider === 'openart' && VIDEO_SCENES) {
-    const wanted = videoSceneIndexes(scenes.length);
+  // 3. Clips vidéo (OpenArt) : nombre réglable par drama (3 par défaut),
+  // scènes réparties uniformément. Après les voix, pour connaître la durée cible.
+  const videoCount = Number.isInteger(project.videoScenes) ? project.videoScenes : undefined;
+  if (provider === 'openart' && VIDEO_SCENES && videoCount !== 0) {
+    const wanted = videoSceneIndexes(scenes.length, videoCount);
     for (let k = 0; k < wanted.length; k++) {
       const scene = scenes[wanted[k]];
       if (scene.video || scene.videoDisabled || !scene.image) {
@@ -247,12 +248,16 @@ async function generateEpisodeAssets(project, episode, update) {
 
 // Prompt de mouvement pour l'image-to-video : on anime l'image existante,
 // gestes naturels et caméra discrète, sans changer visages ni décor.
+// IMPORTANT : bouches immobiles — la voix off n'est pas synchronisée,
+// des lèvres qui bougent au hasard casseraient l'illusion.
 function videoMotionPrompt(scene) {
   return (
     `Bring this scene to life with subtle, realistic motion: characters breathe, ` +
-    `blink and make small natural gestures, one character may speak; gentle slow ` +
-    `cinematic camera push-in; faces, clothing and background stay EXACTLY as in ` +
-    `the source image. Scene: ${scene.imagePrompt}`
+    `blink and make small natural gestures; gentle slow cinematic camera push-in. ` +
+    `CRITICAL: nobody speaks — mouths stay CLOSED and still, absolutely NO lip ` +
+    `movement or talking (the voice-over is added separately and is not lip-synced). ` +
+    `Faces, clothing and background stay EXACTLY as in the source image. ` +
+    `Scene: ${scene.imagePrompt}`
   );
 }
 

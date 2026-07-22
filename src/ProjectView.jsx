@@ -3,7 +3,13 @@ import { Player } from '@remotion/player';
 import { Episode } from './remotion/Episode.jsx';
 import { FPS, WIDTH, HEIGHT, episodeDurationInFrames } from './remotion/timing.js';
 import { api, followJob, fileToDataUrl } from './api.js';
-import { EPISODE_COUNT, VOICES, videoSceneIndexes } from '../shared/catalog.js';
+import {
+  EPISODE_COUNT,
+  VOICES,
+  videoSceneIndexes,
+  DEFAULT_VIDEO_SCENES,
+  MAX_VIDEO_SCENES,
+} from '../shared/catalog.js';
 import './studio-redesign.css';
 
 const STATUS_LABELS = {
@@ -527,14 +533,38 @@ export function ProjectView({ projectId, onBack }) {
         <p className="logline">{project.logline}</p>
       </div>
       {stage === 'production' && (
-        <button
-          className="btn-ghost"
-          disabled={busy}
-          title="Revoir les visages et les voix des personnages"
-          onClick={() => api.reviewCharacters(projectId).then(refresh)}
-        >
-          👥 Personnages
-        </button>
+        <>
+          <label
+            className="video-count"
+            title="Nombre de scènes animées en clip vidéo par épisode (réparties de la première à la dernière). Chaque vidéo coûte nettement plus de crédits OpenArt qu'une image — 0 pour tout garder en images animées."
+          >
+            🎬 Vidéos/épisode
+            <select
+              value={project.videoScenes ?? DEFAULT_VIDEO_SCENES}
+              disabled={busy}
+              onChange={(e) =>
+                api
+                  .patchProject(projectId, { videoScenes: Number(e.target.value) })
+                  .then(refresh)
+                  .catch((err) => alert(err.message))
+              }
+            >
+              {Array.from({ length: MAX_VIDEO_SCENES + 1 }, (_, n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="btn-ghost"
+            disabled={busy}
+            title="Revoir les visages et les voix des personnages"
+            onClick={() => api.reviewCharacters(projectId).then(refresh)}
+          >
+            👥 Personnages
+          </button>
+        </>
       )}
       <label className="btn-ghost upload" title="Musique de fond de tous les épisodes (MP3)">
         {project.musicFile ? '🎵 Changer la musique' : '🎵 Ajouter une musique'}
@@ -817,9 +847,14 @@ export function ProjectView({ projectId, onBack }) {
           className="btn-ghost"
           disabled={busy}
           onClick={() => {
+            const nVid = project.videoScenes ?? DEFAULT_VIDEO_SCENES;
+            const vidNote =
+              nVid > 0
+                ? ` (${nVid} scène${nVid > 1 ? 's' : ''} par épisode animée${nVid > 1 ? 's' : ''} en vidéo, nettement plus coûteux)`
+                : '';
             if (
               confirm(
-                `Produire automatiquement les ${remainingCount} épisodes restants (scénario, images, clips vidéo, voix et MP4) ?\n\nC'est long — souvent plus d'une heure avec OpenArt — et ça consomme tes crédits images/vidéos et ElevenLabs (3 scènes par épisode sont animées en vidéo, nettement plus coûteux). Tu peux fermer la page et revenir : la production continue et l'avancement se raccroche tout seul.`,
+                `Produire automatiquement les ${remainingCount} épisodes restants (scénario, images${nVid > 0 ? ', clips vidéo' : ''}, voix et MP4) ?\n\nC'est long — souvent plus d'une heure avec OpenArt — et ça consomme tes crédits images/vidéos et ElevenLabs${vidNote}. Tu peux fermer la page et revenir : la production continue et l'avancement se raccroche tout seul.`,
               )
             ) {
               runJob(() => api.produceSeason(projectId));
@@ -936,7 +971,10 @@ export function ProjectView({ projectId, onBack }) {
                 episode={episode}
                 scene={scene}
                 index={i}
-                isAutoVideo={videoSceneIndexes(episode.scenes.length).includes(i)}
+                isAutoVideo={videoSceneIndexes(
+                  episode.scenes.length,
+                  project.videoScenes ?? DEFAULT_VIDEO_SCENES,
+                ).includes(i)}
                 busy={busy}
                 runJob={runJob}
                 onRefresh={refresh}

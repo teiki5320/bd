@@ -50,13 +50,25 @@ export function voiceById(id) {
   return VOICES.find((v) => v.id === id) || null;
 }
 
-// Scènes animées en clip vidéo (image-to-video) : la première, celle du
-// milieu et la dernière de chaque épisode. Les autres restent en Ken Burns.
-export function videoSceneIndexes(sceneCount) {
-  if (!sceneCount || sceneCount < 1) {
+// Nombre de scènes animées en clip vidéo par épisode (réglable par drama).
+export const DEFAULT_VIDEO_SCENES = 3;
+export const MAX_VIDEO_SCENES = 8;
+
+// Scènes animées en clip vidéo (image-to-video), réparties uniformément :
+// 1 → la première ; 2 → première + dernière ; 3 → première, milieu, dernière…
+// Les autres scènes restent en images animées Ken Burns.
+export function videoSceneIndexes(sceneCount, count = DEFAULT_VIDEO_SCENES) {
+  if (!sceneCount || sceneCount < 1 || !count || count < 1) {
     return [];
   }
-  const set = new Set([0, Math.floor(sceneCount / 2), sceneCount - 1]);
+  const n = Math.min(count, sceneCount);
+  if (n === 1) {
+    return [0];
+  }
+  const set = new Set();
+  for (let i = 0; i < n; i++) {
+    set.add(Math.round((i * (sceneCount - 1)) / (n - 1)));
+  }
   return [...set].sort((a, b) => a - b);
 }
 

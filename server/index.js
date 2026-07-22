@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { execFile } from 'node:child_process';
 import { PORT, DIST_DIR } from './config.js';
-import { EPISODE_COUNT, STYLES, MAX_STYLES } from '../shared/catalog.js';
+import { EPISODE_COUNT, STYLES, MAX_STYLES, MAX_VIDEO_SCENES } from '../shared/catalog.js';
 import {
   listProjects,
   loadProject,
@@ -180,6 +180,25 @@ app.get('/api/projects/:id', (req, res) => {
 app.delete('/api/projects/:id', (req, res) => {
   deleteProject(req.params.id);
   res.json({ ok: true });
+});
+
+// Réglages du drama (nombre de clips vidéo par épisode…)
+app.patch('/api/projects/:id', (req, res) => {
+  const p = loadProject(req.params.id);
+  if (!p) {
+    res.status(404).json({ error: 'Projet introuvable' });
+    return;
+  }
+  if (req.body.videoScenes !== undefined) {
+    const v = Number(req.body.videoScenes);
+    if (!Number.isInteger(v) || v < 0 || v > MAX_VIDEO_SCENES) {
+      res.status(400).json({ error: `Nombre de vidéos invalide (0 à ${MAX_VIDEO_SCENES}).` });
+      return;
+    }
+    p.videoScenes = v;
+  }
+  saveProject(p);
+  res.json(p);
 });
 
 app.post('/api/projects/:id/music', (req, res) => {
