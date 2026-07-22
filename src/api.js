@@ -80,6 +80,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ data: dataUrl }),
     }),
+  openFolder: (id) => request(`/api/projects/${id}/open-folder`, { method: 'POST' }),
   getStudio: () => request('/api/studio'),
   uploadSticker: (dataUrl) =>
     request('/api/studio/sticker', { method: 'POST', body: JSON.stringify({ data: dataUrl }) }),

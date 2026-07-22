@@ -564,6 +564,35 @@ code {
   background: var(--danger);
 }
 
+/* Encart de succès après « Valider et produire le MP4 » */
+.render-success {
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid var(--gold-dim);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.render-success .rs-title {
+  font-family: Georgia, serif;
+  font-weight: 700;
+  color: var(--gold);
+  font-size: 1.05rem;
+  margin-bottom: 6px;
+}
+
+.render-success p {
+  color: var(--text);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.render-success .rs-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .episode-tabs {
   display: flex;
   gap: 8px;

@@ -22,7 +22,7 @@ function resolveExportRoot() {
 
 export const EXPORT_ROOT = resolveExportRoot();
 
-function sanitizeName(s) {
+export function sanitizeName(s) {
   return (
     String(s || '')
       .replace(/[\/\\:*?"<>|]/g, '-')
@@ -30,6 +30,11 @@ function sanitizeName(s) {
       .trim()
       .slice(0, 80) || 'Drama'
   );
+}
+
+// Dossier d'export d'un drama (ex. iCloud Drive/Dramas/Ma Sœur, Mon Poison).
+export function projectExportDir(title) {
+  return path.join(EXPORT_ROOT, sanitizeName(title));
 }
 
 // Copie le MP4 d'un épisode validé vers le dossier du drama sur le Bureau.
