@@ -89,13 +89,18 @@ async function synthesizeEleven(text, voiceId, outPath) {
     throw new Error('ELEVENLABS_API_KEY absente du .env');
   }
   const model = process.env.ELEVEN_MODEL || 'eleven_turbo_v2_5';
+  const isV25 = /turbo_v2_5|flash_v2_5/.test(model);
   const body = {
     text,
     model_id: model,
-    voice_settings: { stability: 0.45, similarity_boost: 0.75, style: 0.35 },
+    // Sur turbo/flash v2.5, style > 0 provoque grésillements et artefacts :
+    // il doit rester à 0. L'expressivité vient du texte, pas de ce réglage.
+    voice_settings: isV25
+      ? { stability: 0.5, similarity_boost: 0.75, style: 0 }
+      : { stability: 0.45, similarity_boost: 0.75, style: 0.35 },
   };
   // Seuls turbo/flash v2.5 acceptent language_code (rejeté par multilingual_v2).
-  if (/turbo_v2_5|flash_v2_5/.test(model)) {
+  if (isV25) {
     body.language_code = 'fr';
   }
   const res = await fetch(
