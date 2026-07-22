@@ -4,6 +4,7 @@ import { Episode } from './remotion/Episode.jsx';
 import { FPS, WIDTH, HEIGHT, episodeDurationInFrames } from './remotion/timing.js';
 import { api, followJob, fileToDataUrl } from './api.js';
 import { EPISODE_COUNT, VOICES, videoSceneIndexes } from '../shared/catalog.js';
+import './studio-redesign.css';
 
 const STATUS_LABELS = {
   script: '📝 script',
@@ -557,6 +558,7 @@ export function ProjectView({ projectId, onBack }) {
   if (u.edgeClips) freeBits.push(`${fr(u.edgeClips)} répliques Edge TTS`);
   if (u.sayClips) freeBits.push(`${fr(u.sayClips)} répliques voix macOS`);
 
+  // Panneau de coûts détaillé (écrans de validation).
   const usageBar = (
     <div className="usage-panel">
       <div className="usage-head">
@@ -619,6 +621,38 @@ export function ProjectView({ projectId, onBack }) {
     </div>
   );
 
+  // Bandeau de coûts compact, toujours visible dans l'atelier de production.
+  const costRibbon = (
+    <div className="cost-ribbon">
+      <span className="cr-label">💰 Soldes</span>
+      <div className="cost-chip">
+        <span>🎨</span>
+        <span>OpenArt</span>
+        <strong>{oa?.credits != null ? fr(oa.credits) : '…'}</strong>
+        <span className="cr-sub">· ce drama {fr(u.openartImages)} img / {fr(u.openartVideos)} vid</span>
+      </div>
+      <div className="cost-chip">
+        <span>🎙️</span>
+        <span>ElevenLabs</span>
+        <strong>{elRest != null ? fr(elRest) : '…'}</strong>
+        {elPct != null && (
+          <div className="gauge" title={`${elPct} % restants`}>
+            <div className={`gauge-fill ${elPct <= 15 ? 'low' : ''}`} style={{ width: `${elPct}%` }} />
+          </div>
+        )}
+      </div>
+      <div className="cost-chip">
+        <span>🤖</span>
+        <span>Claude</span>
+        <strong>Inclus</strong>
+        <span className="cr-sub">dans ton abonnement</span>
+      </div>
+      <button className="btn-small cr-refresh" title="Actualiser les soldes des comptes" onClick={loadCredits}>
+        ↻ Actualiser
+      </button>
+    </div>
+  );
+
   if (stage === 'script_review') {
     return (
       <div className="page project">
@@ -652,35 +686,137 @@ export function ProjectView({ projectId, onBack }) {
     );
   }
 
+  const episodeTabs = (
+    <nav className="episode-tabs">
+      {Array.from({ length: EPISODE_COUNT }, (_, i) => i + 1).map((n) => {
+        const ep = project.episodes.find((e) => e.number === n);
+        const summary = project.episodeSummaries.find((s) => s.number === n);
+        return (
+          <button
+            key={n}
+            className={`ep-tab ${n === epNumber ? 'active' : ''} ${ep ? 'exists' : ''}`}
+            title={summary ? `${summary.title} — ${summary.summary}` : ''}
+            onClick={() => ep && setEpNumber(n)}
+            disabled={!ep}
+          >
+            {n}
+            {ep && <span className="ep-status">{STATUS_LABELS[ep.status] || ep.status}</span>}
+          </button>
+        );
+      })}
+    </nav>
+  );
+
+  const playerActions = (
+    <div className="player-actions">
+      <button
+        className="btn-primary"
+        disabled={busy}
+        onClick={() => runJob(() => api.renderEpisode(projectId, epNumber))}
+      >
+        ✅ Valider et produire le MP4
+      </button>
+      <button
+        className="btn-ghost"
+        disabled={busy}
+        onClick={() => {
+          if (confirm('Régénérer toutes les images de cet épisode avec le fournisseur actuel ?')) {
+            runJob(() => api.regenAllImages(projectId, epNumber));
+          }
+        }}
+      >
+        🖼️ Régénérer toutes les images
+      </button>
+      <button
+        className="btn-ghost"
+        disabled={busy}
+        onClick={() => {
+          if (confirm('Régénérer toutes les voix de cet épisode ?')) {
+            runJob(() => api.regenAllAudio(projectId, epNumber));
+          }
+        }}
+      >
+        🔊 Générer toutes les voix
+      </button>
+      {episode?.renderedFile && (
+        <a
+          className="btn-ghost"
+          href={`/files/${project.id}/${episode.renderedFile}`}
+          download={`${project.title} - episode ${episode.number}.mp4`}
+        >
+          ⬇️ Télécharger l'épisode {episode.number}
+        </a>
+      )}
+      {nextNumber && (
+        <button
+          className={`btn-primary next ${currentDone ? '' : 'secondary'}`}
+          disabled={busy}
+          onClick={() => {
+            if (currentDone || confirm("L'épisode courant n'est pas encore validé. Produire le suivant quand même ?")) {
+              produce(nextNumber);
+            }
+          }}
+        >
+          ▶️ Produire l'épisode {nextNumber}
+        </button>
+      )}
+      {remainingCount > 0 && (
+        <button
+          className="btn-ghost"
+          disabled={busy}
+          onClick={() => {
+            if (
+              confirm(
+                `Produire automatiquement les ${remainingCount} épisodes restants (scénario, images, clips vidéo, voix et MP4) ?\n\nC'est long — souvent plus d'une heure avec OpenArt — et ça consomme tes crédits images/vidéos et ElevenLabs (3 scènes par épisode sont animées en vidéo, nettement plus coûteux). Tu peux fermer la page et revenir : la production continue et l'avancement se raccroche tout seul.`,
+              )
+            ) {
+              runJob(() => api.produceSeason(projectId));
+            }
+          }}
+        >
+          🚀 Produire toute la saison ({remainingCount} restant{remainingCount > 1 ? 's' : ''})
+        </button>
+      )}
+      {renderedEpisodes.length > 0 && (
+        <div className="downloads-box">
+          <div className="downloads-title">📥 Épisodes prêts</div>
+          <div className="downloads-links">
+            {renderedEpisodes.map((e) => (
+              <a
+                key={e.number}
+                className="dl-chip"
+                href={`/files/${project.id}/${e.renderedFile}`}
+                download={`${project.title} - episode ${e.number}.mp4`}
+                title={e.title}
+              >
+                Ép. {e.number}
+              </a>
+            ))}
+            {renderedEpisodes.length > 1 && (
+              <a className="dl-chip all" href={`/api/projects/${project.id}/season.zip`}>
+                ⬇️ Tout (.zip)
+              </a>
+            )}
+          </div>
+          <p className="downloads-hint">
+            📁 Copiés automatiquement dans <strong>Bureau → Dramas → {project.title}</strong>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="page project">
+    <div className="studio project">
       {header}
-      {usageBar}
-
-      <nav className="episode-tabs">
-        {Array.from({ length: EPISODE_COUNT }, (_, i) => i + 1).map((n) => {
-          const ep = project.episodes.find((e) => e.number === n);
-          const summary = project.episodeSummaries.find((s) => s.number === n);
-          return (
-            <button
-              key={n}
-              className={`ep-tab ${n === epNumber ? 'active' : ''} ${ep ? 'exists' : ''}`}
-              title={summary ? `${summary.title} — ${summary.summary}` : ''}
-              onClick={() => ep && setEpNumber(n)}
-              disabled={!ep}
-            >
-              {n}
-              {ep && <span className="ep-status">{STATUS_LABELS[ep.status] || ep.status}</span>}
-            </button>
-          );
-        })}
-      </nav>
-
+      {episodeTabs}
+      {costRibbon}
       {jobBanner}
 
       {episode ? (
-        <div className="workspace">
-          <div className="player-column">
+        <div className="studio-main">
+          {/* Colonne lecteur + actions : toujours dans le viewport, jamais besoin de scroller la page */}
+          <aside className="studio-player-col">
             <div className="player-frame">
               <Player
                 key={playerKey}
@@ -703,105 +839,11 @@ export function ProjectView({ projectId, onBack }) {
                 style={{ width: '100%', aspectRatio: '9 / 16' }}
               />
             </div>
-            <div className="player-actions">
-              <button
-                className="btn-primary"
-                disabled={busy}
-                onClick={() => runJob(() => api.renderEpisode(projectId, epNumber))}
-              >
-                ✅ Valider et produire le MP4
-              </button>
-              <button
-                className="btn-ghost"
-                disabled={busy}
-                onClick={() => {
-                  if (confirm('Régénérer toutes les images de cet épisode avec le fournisseur actuel ?')) {
-                    runJob(() => api.regenAllImages(projectId, epNumber));
-                  }
-                }}
-              >
-                🖼️ Régénérer toutes les images
-              </button>
-              <button
-                className="btn-ghost"
-                disabled={busy}
-                onClick={() => {
-                  if (confirm('Régénérer toutes les voix de cet épisode ?')) {
-                    runJob(() => api.regenAllAudio(projectId, epNumber));
-                  }
-                }}
-              >
-                🔊 Générer toutes les voix
-              </button>
-              {episode.renderedFile && (
-                <a
-                  className="btn-ghost"
-                  href={`/files/${project.id}/${episode.renderedFile}`}
-                  download={`${project.title} - episode ${episode.number}.mp4`}
-                >
-                  ⬇️ Télécharger l'épisode {episode.number}
-                </a>
-              )}
-              {nextNumber && (
-                <button
-                  className={`btn-primary next ${currentDone ? '' : 'secondary'}`}
-                  disabled={busy}
-                  onClick={() => {
-                    if (currentDone || confirm("L'épisode courant n'est pas encore validé. Produire le suivant quand même ?")) {
-                      produce(nextNumber);
-                    }
-                  }}
-                >
-                  ▶️ Produire l'épisode {nextNumber}
-                </button>
-              )}
-              {remainingCount > 0 && (
-                <button
-                  className="btn-ghost"
-                  disabled={busy}
-                  onClick={() => {
-                    if (
-                      confirm(
-                        `Produire automatiquement les ${remainingCount} épisodes restants (scénario, images, clips vidéo, voix et MP4) ?\n\nC'est long — souvent plus d'une heure avec OpenArt — et ça consomme tes crédits images/vidéos et ElevenLabs (3 scènes par épisode sont animées en vidéo, nettement plus coûteux). Tu peux fermer la page et revenir : la production continue et l'avancement se raccroche tout seul.`,
-                      )
-                    ) {
-                      runJob(() => api.produceSeason(projectId));
-                    }
-                  }}
-                >
-                  🚀 Produire toute la saison ({remainingCount} restant{remainingCount > 1 ? 's' : ''})
-                </button>
-              )}
-              {renderedEpisodes.length > 0 && (
-                <div className="downloads-box">
-                  <div className="downloads-title">📥 Épisodes prêts</div>
-                  <div className="downloads-links">
-                    {renderedEpisodes.map((e) => (
-                      <a
-                        key={e.number}
-                        className="dl-chip"
-                        href={`/files/${project.id}/${e.renderedFile}`}
-                        download={`${project.title} - episode ${e.number}.mp4`}
-                        title={e.title}
-                      >
-                        Ép. {e.number}
-                      </a>
-                    ))}
-                    {renderedEpisodes.length > 1 && (
-                      <a className="dl-chip all" href={`/api/projects/${project.id}/season.zip`}>
-                        ⬇️ Tout (.zip)
-                      </a>
-                    )}
-                  </div>
-                  <p className="downloads-hint">
-                    📁 Copiés automatiquement dans <strong>Bureau → Dramas → {project.title}</strong>
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+            {playerActions}
+          </aside>
 
-          <div className="scenes-column">
+          {/* Colonne scènes : le seul élément qui défile */}
+          <section className="studio-scenes scenes-column">
             <div className="char-strip">
               {project.characters.map((c) => (
                 <div key={c.id} className="char-chip" title={`${c.role} — ${c.visual}`}>
@@ -839,7 +881,7 @@ export function ProjectView({ projectId, onBack }) {
                 onRefresh={refresh}
               />
             ))}
-          </div>
+          </section>
         </div>
       ) : (
         <div className="centered">
