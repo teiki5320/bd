@@ -299,7 +299,40 @@ function CreationProgress({ job, error }) {
   );
 }
 
+// Écran d'entrée : deux applis en une. La Version normale reste exactement
+// comme avant ; la Version Synchro anime les lèvres (fal.ai) et range ses
+// épisodes dans un dossier iCloud séparé (Dramas Synchro).
+function ModeGate({ onPick }) {
+  return (
+    <div className="page centered">
+      <header className="home-header">
+        <h1>Drama Studio</h1>
+        <p className="tagline">Choisis ta version pour cette session.</p>
+      </header>
+      <div className="mode-gate">
+        <button className="mode-card" onClick={() => onPick('normal')}>
+          <span className="mode-emoji">🎬</span>
+          <strong>Version normale</strong>
+          <span className="mode-desc">
+            Comme d'habitude : voix off + sous-titres, bouches immobiles dans les clips. Épisodes
+            rangés dans <strong>Dramas</strong>.
+          </span>
+        </button>
+        <button className="mode-card" onClick={() => onPick('synchro')}>
+          <span className="mode-emoji">🗣️</span>
+          <strong>Version Synchro</strong>
+          <span className="mode-desc">
+            Les lèvres des personnages bougent sur les voix (via fal.ai, payant à l'usage).
+            Épisodes rangés dans <strong>Dramas Synchro</strong>.
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
+  const [mode, setMode] = useState(null);
   const [view, setView] = useState({ name: 'home' });
   const [projects, setProjects] = useState([]);
   const [health, setHealth] = useState(null);
@@ -338,9 +371,13 @@ export function App() {
     }
   };
 
-  const create = () => runCreation(() => api.createProject(selected, theme));
+  const create = () => runCreation(() => api.createProject(selected, theme, mode));
   const createCustom = (answers) =>
-    runCreation(() => api.createCustomProject(answers), 'custom');
+    runCreation(() => api.createCustomProject({ ...answers, mode }), 'custom');
+
+  if (!mode) {
+    return <ModeGate onPick={setMode} />;
+  }
 
   if (view.name === 'project') {
     return (
@@ -387,7 +424,21 @@ export function App() {
       <header className="home-header">
         <h1>Drama Studio</h1>
         <p className="tagline">Micro-dramas africains — 10 épisodes de 60 secondes, générés chez toi.</p>
+        <p className="mode-line">
+          {mode === 'synchro' ? '🗣️ Version Synchro (lèvres animées)' : '🎬 Version normale'}
+          <button className="btn-small" onClick={() => setMode(null)}>
+            ↔ Changer de version
+          </button>
+        </p>
       </header>
+
+      {mode === 'synchro' && health && !health.fal && (
+        <div className="banner warn">
+          🗣️ La Version Synchro a besoin d'une clé fal.ai pour animer les lèvres : crée un compte
+          sur fal.ai, puis ajoute <code>FAL_KEY=...</code> dans le fichier <code>.env</code> et
+          relance. Sans clé, les dramas se créent normalement mais la synchro échouera.
+        </div>
+      )}
 
       {health && !health.claude && (
         <div className="banner warn">
@@ -467,11 +518,11 @@ export function App() {
 
       <BrandCard studio={studio} onChange={refreshStudio} />
 
-      {projects.length > 0 && (
+      {projects.filter((p) => (p.mode || 'normal') === mode).length > 0 && (
         <section className="library">
-          <h2>Mes dramas</h2>
+          <h2>Mes dramas {mode === 'synchro' ? 'Synchro' : ''}</h2>
           <div className="project-grid">
-            {projects.map((p) => (
+            {projects.filter((p) => (p.mode || 'normal') === mode).map((p) => (
               <div key={p.id} className="project-card" onClick={() => setView({ name: 'project', id: p.id })}>
                 <h3>{p.title}</h3>
                 <p className="logline">{p.logline}</p>

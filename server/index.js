@@ -29,6 +29,7 @@ import {
   regenerateSceneAudio,
   generateSceneVideo,
   removeSceneVideo,
+  lipsyncSceneVideo,
   regenerateCharacterPortrait,
   newCharacterFace,
   characterVoicePreview,
@@ -39,7 +40,7 @@ import { renderEpisode } from './render.js';
 import { currentProvider } from './images.js';
 import { ttsInfo, elevenBalance, isCatalogVoice } from './tts.js';
 import { openartCredits } from './openart.js';
-import { exportAllProjects, EXPORT_ROOT, projectExportDir } from './exporter.js';
+import { exportAllProjects, EXPORT_ROOT, exportRootFor, projectExportDir } from './exporter.js';
 import {
   STUDIO_DIR,
   loadStudio,
@@ -61,6 +62,7 @@ app.get('/api/health', (req, res) => {
       imageProvider: currentProvider(),
       tts: ttsInfo(),
       episodeCount: EPISODE_COUNT,
+      fal: Boolean(process.env.FAL_KEY),
     });
   });
 });
@@ -131,13 +133,16 @@ app.get('/api/projects', (req, res) => {
 });
 
 app.post('/api/projects', (req, res) => {
-  const { styles, theme } = req.body || {};
+  const { styles, theme, mode } = req.body || {};
   if (!Array.isArray(styles) || styles.length < 1 || styles.length > 3) {
     res.status(400).json({ error: 'Choisis 1 à 3 styles.' });
     return;
   }
   const job = startJob('Création du drama', (update) =>
-    createProject({ styles, theme: (theme || '').slice(0, 500) }, update),
+    createProject(
+      { styles, theme: (theme || '').slice(0, 500), mode: mode === 'synchro' ? 'synchro' : 'normal' },
+      update,
+    ),
   );
   res.json({ jobId: job.id });
 });
@@ -161,6 +166,7 @@ app.post('/api/projects/custom', (req, res) => {
     styles: (Array.isArray(b.styles) ? b.styles : []).filter(validStyle).slice(0, MAX_STYLES),
     mustHappen: String(b.mustHappen || '').trim().slice(0, 1000),
     fidelity: b.fidelity === 'libre' ? 'libre' : 'fidele',
+    mode: b.mode === 'synchro' ? 'synchro' : 'normal',
   };
   const job = startJob('Création depuis ton script', (update) =>
     createCustomProject(answers, update),
@@ -311,12 +317,9 @@ app.post('/api/projects/:id/open-folder', (req, res) => {
     res.status(400).json({ error: "L'ouverture du dossier n'est possible que sur Mac." });
     return;
   }
-  const dramaDir = projectExportDir(p.title);
-  const target = fs.existsSync(dramaDir)
-    ? dramaDir
-    : fs.existsSync(EXPORT_ROOT)
-      ? EXPORT_ROOT
-      : rendersDir(p.id);
+  const dramaDir = projectExportDir(p);
+  const root = exportRootFor(p);
+  const target = fs.existsSync(dramaDir) ? dramaDir : fs.existsSync(root) ? root : rendersDir(p.id);
   execFile('open', [target], (err) => {
     if (err) {
       res.status(500).json({ error: `Ouverture impossible : ${err.message}` });
@@ -540,11 +543,25 @@ app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/image', (req, res) => {
 });
 
 // Clip vidéo d'une scène : génération (coûteuse en crédits) ou retour à l'image fixe.
+// En Version Synchro, la synchro labiale s'enchaîne automatiquement.
 app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/video', (req, res) => {
   withScene(req, res, (p, ep, scene) => {
-    const job = startJob('Clip vidéo de la scène', (update) =>
-      generateSceneVideo(p, ep, scene, update),
-    { projectId: p.id });
+    const job = startJob('Clip vidéo de la scène', async (update) => {
+      await generateSceneVideo(p, ep, scene, update);
+      if (p.mode === 'synchro') {
+        await lipsyncSceneVideo(p, ep, scene, update);
+      }
+    }, { projectId: p.id });
+    res.json({ jobId: job.id });
+  });
+});
+
+// (Re)synchronise les lèvres du clip existant sur les voix de la scène.
+app.post('/api/projects/:id/episodes/:n/scenes/:sceneId/lipsync', (req, res) => {
+  withScene(req, res, (p, ep, scene) => {
+    const job = startJob('Synchro labiale', (update) => lipsyncSceneVideo(p, ep, scene, update), {
+      projectId: p.id,
+    });
     res.json({ jobId: job.id });
   });
 });

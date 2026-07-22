@@ -18,8 +18,8 @@ export const api = {
   deleteProject: (id) => request(`/api/projects/${id}`, { method: 'DELETE' }),
   patchProject: (id, patch) =>
     request(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
-  createProject: (styles, theme) =>
-    request('/api/projects', { method: 'POST', body: JSON.stringify({ styles, theme }) }),
+  createProject: (styles, theme, mode) =>
+    request('/api/projects', { method: 'POST', body: JSON.stringify({ styles, theme, mode }) }),
   createCustomProject: (answers) =>
     request('/api/projects/custom', { method: 'POST', body: JSON.stringify(answers) }),
   produceEpisode: (id, n) =>
@@ -70,6 +70,8 @@ export const api = {
     request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}/audio`, { method: 'POST' }),
   regenVideo: (id, n, sceneId) =>
     request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}/video`, { method: 'POST' }),
+  lipsyncScene: (id, n, sceneId) =>
+    request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}/lipsync`, { method: 'POST' }),
   removeVideo: (id, n, sceneId) =>
     request(`/api/projects/${id}/episodes/${n}/scenes/${sceneId}/video`, { method: 'DELETE' }),
   uploadSceneImage: (id, n, sceneId, dataUrl) =>

@@ -177,6 +177,62 @@ code {
   border-color: var(--gold-dim);
 }
 
+/* ---------- Écran d'entrée : Version normale / Version Synchro ---------- */
+
+.mode-gate {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 340px));
+  gap: 20px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.mode-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 30px 26px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.mode-card:hover {
+  border-color: var(--gold-dim);
+  background: var(--panel-2);
+}
+
+.mode-card strong {
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+  color: var(--gold);
+}
+
+.mode-card .mode-emoji {
+  font-size: 2.6rem;
+}
+
+.mode-card .mode-desc {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.mode-line {
+  margin-top: 10px;
+  color: var(--gold-dim);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
 /* ---------- Ma marque (sticker + outro) ---------- */
 
 .brand-card {

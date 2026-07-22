@@ -51,7 +51,7 @@ export function removeSticker() {
 }
 
 // ffmpeg embarqué par Remotion (compositor-<plateforme>), présent après npm install.
-function findFfmpeg() {
+export function findFfmpeg() {
   const dir = path.join(ROOT, 'node_modules', '@remotion');
   try {
     for (const entry of fs.readdirSync(dir)) {

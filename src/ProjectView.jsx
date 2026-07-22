@@ -23,11 +23,12 @@ function exportPlace(exportedTo) {
   if (!exportedTo) {
     return null;
   }
+  const folder = exportedTo.includes('Dramas Synchro') ? 'Dramas Synchro' : 'Dramas';
   if (exportedTo.includes('com~apple~CloudDocs')) {
-    return '☁️ iCloud Drive → Dramas';
+    return `☁️ iCloud Drive → ${folder}`;
   }
   if (exportedTo.includes('/Desktop/')) {
-    return '🖥️ Bureau → Dramas';
+    return `🖥️ Bureau → ${folder}`;
   }
   return `📁 ${exportedTo.replace(/\/[^/]+$/, '')}`;
 }
@@ -365,7 +366,7 @@ function SceneCard({ project, episode, scene, index, isAutoVideo, busy, runJob, 
         <strong>
           Scène {index + 1}
           {scene.video ? (
-            <span className="scene-badge">🎬 vidéo</span>
+            <span className="scene-badge">{scene.lipsynced ? '🗣️ vidéo synchro' : '🎬 vidéo'}</span>
           ) : isAutoVideo && !scene.videoDisabled ? (
             <span className="scene-badge dim" title="Cette scène sera animée en clip vidéo à la production">
               🎬 vidéo prévue
@@ -475,6 +476,16 @@ function SceneCard({ project, episode, scene, index, isAutoVideo, busy, runJob, 
         >
           🎬 {scene.video ? 'Régénérer la vidéo' : 'Générer la vidéo'}
         </button>
+        {scene.video && project.mode === 'synchro' && (
+          <button
+            className={`btn-small ${scene.lipsynced ? '' : 'primary'}`}
+            disabled={busy}
+            title="Anime les lèvres du clip sur les voix de la scène (fal.ai, payant à l'usage)"
+            onClick={() => runJob(() => api.lipsyncScene(project.id, episode.number, scene.id))}
+          >
+            🗣️ {scene.lipsynced ? 'Resynchroniser les lèvres' : 'Synchroniser les lèvres'}
+          </button>
+        )}
         {scene.video && (
           <button
             className="btn-small"
@@ -488,6 +499,12 @@ function SceneCard({ project, episode, scene, index, isAutoVideo, busy, runJob, 
       </div>
       {scene.imageError && <p className="error small">Image : {scene.imageError}</p>}
       {scene.videoError && <p className="error small">Vidéo : {scene.videoError}</p>}
+      {scene.lipsyncError && <p className="error small">Synchro : {scene.lipsyncError}</p>}
+      {project.mode === 'synchro' && scene.video && !scene.lipsynced && !scene.lipsyncError && (
+        <p className="error small">
+          🗣️ Clip pas encore synchronisé avec les voix — clique « Synchroniser les lèvres ».
+        </p>
+      )}
       {scene.lines.some((l) => l.audioFallback) && (
         <p className="error small">
           ⚠️ Voix de secours utilisée (ElevenLabs indisponible — crédits épuisés ?). Régénère la
@@ -621,7 +638,14 @@ export function ProjectView({ projectId, onBack }) {
         ← Mes dramas
       </button>
       <div className="project-title">
-        <h1>{project.title}</h1>
+        <h1>
+          {project.title}
+          {project.mode === 'synchro' && (
+            <span className="scene-badge" title="Version Synchro : lèvres animées via fal.ai">
+              🗣️ Synchro
+            </span>
+          )}
+        </h1>
         <p className="logline">{project.logline}</p>
       </div>
       {stage === 'production' && (
@@ -696,6 +720,7 @@ export function ProjectView({ projectId, onBack }) {
   const freeBits = [];
   if (u.pollinationsImages) freeBits.push(`${fr(u.pollinationsImages)} images Pollinations`);
   if (u.falImages) freeBits.push(`${fr(u.falImages)} images fal.ai`);
+  if (u.falLipsyncs) freeBits.push(`🗣️ ${fr(u.falLipsyncs)} synchros labiales fal.ai (payant)`);
   if (u.edgeClips) freeBits.push(`${fr(u.edgeClips)} répliques Edge TTS`);
   if (u.sayClips) freeBits.push(`${fr(u.sayClips)} répliques voix macOS`);
 
@@ -758,7 +783,7 @@ export function ProjectView({ projectId, onBack }) {
           </div>
         </div>
       </div>
-      {freeBits.length > 0 && <div className="usage-free">Et en gratuit : {freeBits.join(' · ')}</div>}
+      {freeBits.length > 0 && <div className="usage-free">Et aussi : {freeBits.join(' · ')}</div>}
     </div>
   );
 

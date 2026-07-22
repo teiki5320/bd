@@ -21,6 +21,12 @@ function resolveExportRoot() {
 }
 
 export const EXPORT_ROOT = resolveExportRoot();
+// Les dramas « Version Synchro » sont rangés à part (ex. iCloud/Dramas Synchro).
+export const EXPORT_ROOT_SYNCHRO = `${EXPORT_ROOT} Synchro`;
+
+export function exportRootFor(project) {
+  return project && project.mode === 'synchro' ? EXPORT_ROOT_SYNCHRO : EXPORT_ROOT;
+}
 
 export function sanitizeName(s) {
   return (
@@ -33,8 +39,8 @@ export function sanitizeName(s) {
 }
 
 // Dossier d'export d'un drama (ex. iCloud Drive/Dramas/Ma Sœur, Mon Poison).
-export function projectExportDir(title) {
-  return path.join(EXPORT_ROOT, sanitizeName(title));
+export function projectExportDir(project) {
+  return path.join(exportRootFor(project), sanitizeName(project.title));
 }
 
 // Copie le MP4 d'un épisode validé vers le dossier du drama sur le Bureau.
@@ -48,7 +54,7 @@ export function exportEpisode(project, episode) {
     if (!fs.existsSync(src)) {
       return null;
     }
-    const dir = path.join(EXPORT_ROOT, sanitizeName(project.title));
+    const dir = projectExportDir(project);
     fs.mkdirSync(dir, { recursive: true });
     const name = `Episode ${String(episode.number).padStart(2, '0')}${
       episode.title ? ` - ${sanitizeName(episode.title)}` : ''
