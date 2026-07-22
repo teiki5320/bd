@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { STYLES, MAX_STYLES, EPISODE_COUNT } from '../shared/catalog.js';
-import { api, followJob } from './api.js';
+import { api, followJob, fileToDataUrl } from './api.js';
 import { ProjectView } from './ProjectView.jsx';
 
 function StylePicker({ selected, onToggle }) {
@@ -21,6 +21,127 @@ function StylePicker({ selected, onToggle }) {
         );
       })}
     </div>
+  );
+}
+
+// « Ma marque » : sticker (logo) et outro perso, appliqués à tous les épisodes.
+function BrandCard({ studio, onChange }) {
+  const [busy, setBusy] = useState(false);
+
+  const upload = async (file, kind) => {
+    setBusy(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      if (kind === 'sticker') {
+        await api.uploadSticker(dataUrl);
+      } else {
+        await api.uploadOutro(dataUrl);
+      }
+      onChange();
+    } catch (e) {
+      alert(`Envoi impossible : ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (kind) => {
+    setBusy(true);
+    try {
+      if (kind === 'sticker') {
+        await api.deleteSticker();
+      } else {
+        await api.deleteOutro();
+      }
+      onChange();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const hasAny = studio && (studio.sticker || studio.outro);
+
+  return (
+    <details className="brand-card">
+      <summary>
+        🏷️ Ma marque — sticker &amp; outro {hasAny ? '✅' : ''}
+        <span className="brand-hint">appliqués automatiquement à tous les épisodes</span>
+      </summary>
+      <div className="brand-row">
+        <div className="brand-item">
+          <strong>Sticker (logo)</strong>
+          <p className="field-hint">
+            Affiché en haut à droite de chaque épisode. PNG transparent recommandé.
+          </p>
+          {studio?.sticker ? (
+            <img className="brand-preview" src={`/studio/${studio.sticker}`} alt="Sticker" />
+          ) : (
+            <div className="brand-preview empty">Aucun sticker</div>
+          )}
+          <div className="brand-actions">
+            <label className="btn-small upload">
+              ⬆️ {studio?.sticker ? 'Changer' : 'Ajouter'}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                hidden
+                disabled={busy}
+                onChange={(e) => e.target.files[0] && upload(e.target.files[0], 'sticker')}
+              />
+            </label>
+            {studio?.sticker && (
+              <button className="btn-small" disabled={busy} onClick={() => remove('sticker')}>
+                🗑️ Retirer
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="brand-item">
+          <strong>Outro de fin</strong>
+          <p className="field-hint">
+            Ta vidéo (ou image) de marque, ajoutée après l'écran « À suivre » de chaque épisode.
+            MP4 court conseillé (moins de 30 Mo, 15 s max).
+          </p>
+          {studio?.outro ? (
+            studio.outroIsVideo ? (
+              <video
+                className="brand-preview"
+                src={`/studio/${studio.outro}`}
+                muted
+                loop
+                autoPlay
+                playsInline
+              />
+            ) : (
+              <img className="brand-preview" src={`/studio/${studio.outro}`} alt="Outro" />
+            )
+          ) : (
+            <div className="brand-preview empty">Aucun outro</div>
+          )}
+          <div className="brand-actions">
+            <label className="btn-small upload">
+              ⬆️ {studio?.outro ? 'Changer' : 'Ajouter'}
+              <input
+                type="file"
+                accept="video/mp4,video/quicktime,image/png,image/jpeg,image/webp"
+                hidden
+                disabled={busy}
+                onChange={(e) => e.target.files[0] && upload(e.target.files[0], 'outro')}
+              />
+            </label>
+            {studio?.outro && (
+              <button className="btn-small" disabled={busy} onClick={() => remove('outro')}>
+                🗑️ Retirer
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="field-hint">
+        💡 Ils apparaîtront dans l'aperçu et dans les prochains MP4. Pour les ajouter à un épisode
+        déjà produit, rouvre-le et clique « ✅ Valider et produire le MP4 ».
+      </p>
+    </details>
   );
 }
 
@@ -182,6 +303,8 @@ export function App() {
   const [view, setView] = useState({ name: 'home' });
   const [projects, setProjects] = useState([]);
   const [health, setHealth] = useState(null);
+  const [credits, setCredits] = useState(null);
+  const [studio, setStudio] = useState(null);
   const [selected, setSelected] = useState([]);
   const [theme, setTheme] = useState('');
   const [job, setJob] = useState(null);
@@ -189,9 +312,13 @@ export function App() {
 
   const refresh = () => api.listProjects().then(setProjects).catch(() => {});
 
+  const refreshStudio = () => api.getStudio().then(setStudio).catch(() => {});
+
   useEffect(() => {
     refresh();
     api.health().then(setHealth).catch(() => {});
+    api.credits().then(setCredits).catch(() => {});
+    refreshStudio();
   }, []);
 
   const toggleStyle = (id) =>
@@ -281,6 +408,31 @@ export function App() {
           {' · '}Voix : <strong>{health.tts}</strong>
         </p>
       )}
+      {credits &&
+        (credits.openart?.credits != null || credits.elevenlabs?.limit != null) && (
+          <p className="provider-line">
+            💰 Il te reste :{' '}
+            {credits.openart?.credits != null && (
+              <>
+                OpenArt <strong>{Number(credits.openart.credits).toLocaleString('fr-FR')}</strong>{' '}
+                crédits
+              </>
+            )}
+            {credits.openart?.credits != null && credits.elevenlabs?.limit != null && ' · '}
+            {credits.elevenlabs?.limit != null && (
+              <>
+                ElevenLabs{' '}
+                <strong>
+                  {Math.max(
+                    0,
+                    credits.elevenlabs.limit - credits.elevenlabs.used,
+                  ).toLocaleString('fr-FR')}
+                </strong>{' '}
+                crédits
+              </>
+            )}
+          </p>
+        )}
 
       <section className="create-card">
         <h2>Nouveau drama</h2>
@@ -312,6 +464,8 @@ export function App() {
           </button>
         </div>
       </section>
+
+      <BrandCard studio={studio} onChange={refreshStudio} />
 
       {projects.length > 0 && (
         <section className="library">

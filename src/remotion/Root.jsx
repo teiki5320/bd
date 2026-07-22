@@ -18,9 +18,11 @@ export const RemotionRoot = () => {
         assetBase: '',
         musicFile: null,
         seriesTitle: '',
+        studio: null,
+        studioBase: '',
       }}
       calculateMetadata={({ props }) => ({
-        durationInFrames: episodeDurationInFrames(props.episode),
+        durationInFrames: episodeDurationInFrames(props.episode, props.studio),
       })}
     />
   );

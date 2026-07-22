@@ -80,6 +80,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ data: dataUrl }),
     }),
+  getStudio: () => request('/api/studio'),
+  uploadSticker: (dataUrl) =>
+    request('/api/studio/sticker', { method: 'POST', body: JSON.stringify({ data: dataUrl }) }),
+  deleteSticker: () => request('/api/studio/sticker', { method: 'DELETE' }),
+  uploadOutro: (dataUrl) =>
+    request('/api/studio/outro', { method: 'POST', body: JSON.stringify({ data: dataUrl }) }),
+  deleteOutro: () => request('/api/studio/outro', { method: 'DELETE' }),
   getJob: (id) => request(`/api/jobs/${id}`),
 };
 

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { ROOT, PORT } from './config.js';
 import { rendersDir, saveProject } from './projects.js';
 import { exportEpisode } from './exporter.js';
+import { loadStudio } from './studio.js';
 
 let bundlePromise = null;
 
@@ -21,7 +22,7 @@ async function getBundle() {
   return bundlePromise;
 }
 
-export function buildEpisodeProps(project, episode, assetBase) {
+export function buildEpisodeProps(project, episode, assetBase, studioBase) {
   return {
     episode: {
       number: episode.number,
@@ -33,6 +34,9 @@ export function buildEpisodeProps(project, episode, assetBase) {
     assetBase,
     musicFile: project.musicFile,
     seriesTitle: project.title,
+    // Marque de l'auteur (sticker + outro), commune à tous les dramas.
+    studio: loadStudio(),
+    studioBase: studioBase || '',
   };
 }
 
@@ -45,6 +49,7 @@ export async function renderEpisode(project, episode, update) {
     project,
     episode,
     `http://127.0.0.1:${PORT}/files/${project.id}`,
+    `http://127.0.0.1:${PORT}/studio`,
   );
 
   update('Analyse de la composition…');
